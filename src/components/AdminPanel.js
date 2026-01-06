@@ -1,0 +1,247 @@
+import { useState, useEffect } from 'react';
+import { Plus, Edit2, Trash2, Save, X } from 'lucide-react';
+import { addProduct, updateProduct, deleteProduct, getSales } from '../services/firebaseService';
+
+const AdminPanel = ({ inventory, onClose }) => {
+  const [activeTab, setActiveTab] = useState('inventory');
+  const [editingProduct, setEditingProduct] = useState(null);
+  const [newProduct, setNewProduct] = useState({
+    name: '',
+    price: '',
+    stock: ''
+  });
+  const [sales, setSales] = useState([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (activeTab === 'sales') {
+      loadSales();
+    }
+  }, [activeTab]);
+
+  const loadSales = async () => {
+    setLoading(true);
+    try {
+      const salesData = await getSales(20);
+      setSales(salesData);
+    } catch (error) {
+      console.error('Error loading sales:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAddProduct = async (e) => {
+    e.preventDefault();
+    if (!newProduct.name || !newProduct.price || !newProduct.stock) {
+      alert('Please fill all fields');
+      return;
+    }
+
+    try {
+      await addProduct({
+        name: newProduct.name,
+        price: parseFloat(newProduct.price),
+        stock: parseInt(newProduct.stock)
+      });
+      setNewProduct({ name: '', price: '', stock: '' });
+      alert('Product added successfully!');
+    } catch (error) {
+      alert('Error adding product');
+    }
+  };
+
+  const handleUpdateProduct = async (productId, updates) => {
+    try {
+      await updateProduct(productId, updates);
+      setEditingProduct(null);
+      alert('Product updated successfully!');
+    } catch (error) {
+      alert('Error updating product');
+    }
+  };
+
+  const handleDeleteProduct = async (productId) => {
+    if (window.confirm('Are you sure you want to delete this product?')) {
+      try {
+        await deleteProduct(productId);
+        alert('Product deleted successfully!');
+      } catch (error) {
+        alert('Error deleting product');
+      }
+    }
+  };
+
+  const formatDate = (timestamp) => {
+    if (!timestamp) return 'N/A';
+    return new Date(timestamp.seconds * 1000).toLocaleString();
+  };
+
+  return (
+    <div className="admin-overlay">
+      <div className="admin-panel">
+        <div className="admin-header">
+          <h2>Admin Panel</h2>
+          <button className="btn-close" onClick={onClose}>
+            <X size={20} />
+          </button>
+        </div>
+
+        <div className="admin-tabs">
+          <button 
+            className={activeTab === 'inventory' ? 'active' : ''}
+            onClick={() => setActiveTab('inventory')}
+          >
+            Inventory Management
+          </button>
+          <button 
+            className={activeTab === 'sales' ? 'active' : ''}
+            onClick={() => setActiveTab('sales')}
+          >
+            Sales History
+          </button>
+        </div>
+
+        {activeTab === 'inventory' && (
+          <div className="admin-content">
+            <div className="add-product-form">
+              <h3>Add New Product</h3>
+              <form onSubmit={handleAddProduct}>
+                <input
+                  type="text"
+                  placeholder="Product name"
+                  value={newProduct.name}
+                  onChange={(e) => setNewProduct({...newProduct, name: e.target.value})}
+                />
+                <input
+                  type="number"
+                  step="0.01"
+                  placeholder="Price"
+                  value={newProduct.price}
+                  onChange={(e) => setNewProduct({...newProduct, price: e.target.value})}
+                />
+                <input
+                  type="number"
+                  placeholder="Stock quantity"
+                  value={newProduct.stock}
+                  onChange={(e) => setNewProduct({...newProduct, stock: e.target.value})}
+                />
+                <button type="submit" className="btn-add">
+                  <Plus size={16} /> Add Product
+                </button>
+              </form>
+            </div>
+
+            <div className="inventory-table">
+              <h3>Current Inventory ({inventory.length} items)</h3>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Price</th>
+                    <th>Stock</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {inventory.map(product => (
+                    <tr key={product.id}>
+                      <td>
+                        {editingProduct === product.id ? (
+                          <input
+                            type="text"
+                            defaultValue={product.name}
+                            onBlur={(e) => handleUpdateProduct(product.id, { name: e.target.value })}
+                          />
+                        ) : (
+                          product.name
+                        )}
+                      </td>
+                      <td>
+                        {editingProduct === product.id ? (
+                          <input
+                            type="number"
+                            step="0.01"
+                            defaultValue={product.price}
+                            onBlur={(e) => handleUpdateProduct(product.id, { price: parseFloat(e.target.value) })}
+                          />
+                        ) : (
+                          `$${product.price.toFixed(2)}`
+                        )}
+                      </td>
+                      <td>
+                        {editingProduct === product.id ? (
+                          <input
+                            type="number"
+                            defaultValue={product.stock}
+                            onBlur={(e) => handleUpdateProduct(product.id, { stock: parseInt(e.target.value) })}
+                          />
+                        ) : (
+                          product.stock
+                        )}
+                      </td>
+                      <td>
+                        <span className={`status ${product.stock === 0 ? 'out' : product.stock < 10 ? 'low' : 'good'}`}>
+                          {product.stock === 0 ? 'Out of Stock' : product.stock < 10 ? 'Low Stock' : 'In Stock'}
+                        </span>
+                      </td>
+                      <td>
+                        <button
+                          className="btn-edit"
+                          onClick={() => setEditingProduct(editingProduct === product.id ? null : product.id)}
+                        >
+                          {editingProduct === product.id ? <Save size={14} /> : <Edit2 size={14} />}
+                        </button>
+                        <button
+                          className="btn-delete"
+                          onClick={() => handleDeleteProduct(product.id)}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'sales' && (
+          <div className="admin-content">
+            <div className="sales-summary">
+              <h3>Recent Sales</h3>
+              {loading ? (
+                <p>Loading sales data...</p>
+              ) : (
+                <div className="sales-list">
+                  {sales.map(sale => (
+                    <div key={sale.id} className="sale-item">
+                      <div className="sale-header">
+                        <span className="sale-total">${sale.total.toFixed(2)}</span>
+                        <span className="sale-date">{formatDate(sale.timestamp)}</span>
+                      </div>
+                      <div className="sale-details">
+                        <p>{sale.itemCount} items • Tax: ${sale.tax.toFixed(2)}</p>
+                        <div className="sale-items">
+                          {sale.items.map((item, index) => (
+                            <span key={index} className="sale-item-tag">
+                              {item.name} x{item.qty}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default AdminPanel;
