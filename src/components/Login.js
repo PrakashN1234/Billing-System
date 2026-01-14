@@ -84,10 +84,16 @@ const Login = ({ onLogin }) => {
     setLoading(true);
     setError('');
     try {
-      await signInWithEmailAndPassword(auth, 'demo@mystore.com', 'demo123');
+      await signInWithEmailAndPassword(auth, 'prakashn1234@gmail.com', 'admin123');
       onLogin();
     } catch (error) {
-      setError('Demo login failed. Please use manual login.');
+      // Try the old demo account as fallback
+      try {
+        await signInWithEmailAndPassword(auth, 'demo@mystore.com', 'demo123');
+        onLogin();
+      } catch (fallbackError) {
+        setError('Demo login failed. Please use manual login.');
+      }
     } finally {
       setLoading(false);
     }
@@ -158,7 +164,7 @@ const Login = ({ onLogin }) => {
 
         <div className="demo-credentials">
           <h4>Demo Credentials:</h4>
-          <p>Email: demo@mystore.com</p>
+          <p>Email: demo@prabastore.com</p>
           <p>Password: demo123</p>
           
         </div>

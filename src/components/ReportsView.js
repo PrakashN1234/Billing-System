@@ -8,21 +8,24 @@ import {
   DollarSign,
   Package,
   Users,
-  ShoppingCart
+  ShoppingCart,
+  Eye,
+  Filter,
+  FileText
 } from 'lucide-react';
 import { getSales } from '../services/firebaseService';
+import { printBill, downloadBill } from '../utils/billGenerator';
 
 const ReportsView = ({ inventory }) => {
   const [sales, setSales] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [dateRange, setDateRange] = useState('7days');
+  const [dateRange, setDateRange] = useState('all');
   const [reportStats, setReportStats] = useState({
-    totalRevenue: 0,
-    totalOrders: 0,
-    avgOrderValue: 0,
-    topSellingProduct: '',
-    revenueGrowth: 0,
-    orderGrowth: 0
+    totalBills: 0,
+    totalSales: 0,
+    totalPurchases: 0,
+    profitLoss: 0,
+    totalDiscount: 0
   });
 
   useEffect(() => {
@@ -35,202 +38,249 @@ const ReportsView = ({ inventory }) => {
       const salesData = await getSales(100);
       setSales(salesData);
       
-      // Calculate stats
-      const totalRevenue = salesData.reduce((sum, sale) => sum + sale.total, 0);
-      const totalOrders = salesData.length;
-      const avgOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
+      // Calculate stats from Firebase data
+      const totalBills = salesData.length;
+      const totalSales = salesData.reduce((sum, sale) => sum + (sale.total || 0), 0);
+      const totalDiscount = salesData.reduce((sum, sale) => sum + (sale.discount || 0), 0);
       
-      // Find top selling product
-      const productSales = {};
-      salesData.forEach(sale => {
-        sale.items.forEach(item => {
-          productSales[item.name] = (productSales[item.name] || 0) + item.qty;
-        });
-      });
-      
-      const topSellingProduct = Object.keys(productSales).reduce((a, b) => 
-        productSales[a] > productSales[b] ? a : b, ''
-      );
+      // Mock purchases data (in real app, this would come from purchases collection)
+      const totalPurchases = totalSales * 0.6; // Assuming 60% cost
+      const profitLoss = totalSales - totalPurchases;
 
       setReportStats({
-        totalRevenue,
-        totalOrders,
-        avgOrderValue,
-        topSellingProduct,
-        revenueGrowth: 12.5, // Mock data
-        orderGrowth: 8.3 // Mock data
+        totalBills,
+        totalSales,
+        totalPurchases,
+        profitLoss,
+        totalDiscount
       });
     } catch (error) {
       console.error('Error loading reports data:', error);
+      setReportStats({
+        totalBills: 0,
+        totalSales: 0,
+        totalPurchases: 0,
+        profitLoss: 0,
+        totalDiscount: 0
+      });
     } finally {
       setLoading(false);
     }
   };
 
-  const exportReport = () => {
-    // Mock export functionality
-    alert('Report exported successfully!');
+  const formatDate = (timestamp) => {
+    if (!timestamp) return new Date().toLocaleString('en-IN');
+    const date = timestamp.seconds ? new Date(timestamp.seconds * 1000) : new Date(timestamp);
+    return date.toLocaleString('en-IN', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit'
+    });
   };
 
-  const recentSales = sales.slice(0, 10);
+  const generateBillNumber = (sale, index) => {
+    if (sale.id) return sale.id;
+    const timestamp = sale.timestamp ? 
+      (sale.timestamp.seconds ? sale.timestamp.seconds : Math.floor(sale.timestamp / 1000)) : 
+      Math.floor(Date.now() / 1000);
+    return `BILL${timestamp.toString().slice(-8)}`;
+  };
+
+  const handleViewDetails = (sale) => {
+    // Create bill data for viewing
+    const billData = {
+      items: sale.items || [],
+      subtotal: sale.subtotal || 0,
+      gst: sale.gst || 0,
+      discount: sale.discount || 0,
+      total: sale.total || 0,
+      paymentMode: sale.paymentMode || 'Cash',
+      itemCount: sale.itemCount || 0,
+      timestamp: sale.timestamp ? 
+        (sale.timestamp.seconds ? sale.timestamp.seconds * 1000 : sale.timestamp) : 
+        Date.now()
+    };
+    
+    printBill(billData);
+  };
+
+  const exportReport = () => {
+    // Generate CSV report
+    const csvContent = [
+      ['Bill Number', 'Date & Time', 'Total', 'Payment', 'Items'],
+      ...sales.map((sale, index) => [
+        generateBillNumber(sale, index),
+        formatDate(sale.timestamp),
+        `₹${(sale.total || 0).toFixed(2)}`,
+        sale.paymentMode || 'Cash',
+        sale.itemCount || 0
+      ])
+    ].map(row => row.join(',')).join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `sales_report_${new Date().toISOString().split('T')[0]}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
 
   return (
     <div className="reports-view">
-      <div className="view-header">
-        <h1>Reports & Analytics</h1>
-        <div className="header-actions">
-          <select 
-            value={dateRange} 
-            onChange={(e) => setDateRange(e.target.value)}
-            className="date-range-select"
-          >
-            <option value="7days">Last 7 Days</option>
-            <option value="30days">Last 30 Days</option>
-            <option value="90days">Last 90 Days</option>
-            <option value="1year">Last Year</option>
-          </select>
-          <button className="btn-primary" onClick={exportReport}>
-            <Download size={20} />
-            Export Report
+      {/* Header */}
+      <div className="reports-header">
+        <div className="header-left">
+          <BarChart3 size={24} className="header-icon" />
+          <h1>Sales Reports</h1>
+        </div>
+        <div className="header-right">
+          <button className="analytics-btn">
+            <Package size={16} />
+            Product Analytics
           </button>
+          <div className="filter-group">
+            <Filter size={16} />
+            <span>Filter:</span>
+            <select 
+              value={dateRange} 
+              onChange={(e) => setDateRange(e.target.value)}
+              className="filter-select"
+            >
+              <option value="all">All Time</option>
+              <option value="today">Today</option>
+              <option value="7days">Last 7 Days</option>
+              <option value="30days">Last 30 Days</option>
+              <option value="90days">Last 90 Days</option>
+            </select>
+          </div>
         </div>
       </div>
 
       {loading ? (
-        <div className="loading-state">Loading reports...</div>
+        <div className="loading-state">
+          <div className="loading-spinner"></div>
+          <p>Loading reports...</p>
+        </div>
       ) : (
         <>
-          {/* Key Metrics */}
-          <div className="metrics-grid">
-            <div className="metric-card revenue">
-              <div className="metric-icon">
-                <DollarSign size={24} />
+          {/* Stats Cards */}
+          <div className="stats-grid">
+            <div className="stat-card bills">
+              <div className="stat-header">
+                <span className="stat-label">Total Bills</span>
               </div>
-              <div className="metric-content">
-                <div className="metric-value">₹{reportStats.totalRevenue.toFixed(2)}</div>
-                <div className="metric-label">Total Revenue</div>
-                <div className="metric-change positive">
-                  <TrendingUp size={16} />
-                  +{reportStats.revenueGrowth}%
-                </div>
-              </div>
+              <div className="stat-value">{reportStats.totalBills}</div>
             </div>
 
-            <div className="metric-card orders">
-              <div className="metric-icon">
-                <ShoppingCart size={24} />
+            <div className="stat-card sales">
+              <div className="stat-header">
+                <span className="stat-label">Total Sales</span>
               </div>
-              <div className="metric-content">
-                <div className="metric-value">{reportStats.totalOrders}</div>
-                <div className="metric-label">Total Orders</div>
-                <div className="metric-change positive">
-                  <TrendingUp size={16} />
-                  +{reportStats.orderGrowth}%
-                </div>
-              </div>
+              <div className="stat-value">₹{reportStats.totalSales.toFixed(2)}</div>
             </div>
 
-            <div className="metric-card avg-order">
-              <div className="metric-icon">
-                <BarChart3 size={24} />
+            <div className="stat-card purchases">
+              <div className="stat-header">
+                <span className="stat-label">Total Purchases</span>
               </div>
-              <div className="metric-content">
-                <div className="metric-value">₹{reportStats.avgOrderValue.toFixed(2)}</div>
-                <div className="metric-label">Avg Order Value</div>
-                <div className="metric-change neutral">
-                  <TrendingUp size={16} />
-                  +2.1%
-                </div>
-              </div>
+              <div className="stat-value">₹{reportStats.totalPurchases.toFixed(2)}</div>
             </div>
 
-            <div className="metric-card products">
-              <div className="metric-icon">
-                <Package size={24} />
+            <div className="stat-card profit">
+              <div className="stat-header">
+                <span className="stat-label">Profit/Loss</span>
               </div>
-              <div className="metric-content">
-                <div className="metric-value">{inventory.length}</div>
-                <div className="metric-label">Active Products</div>
-                <div className="metric-change positive">
-                  <TrendingUp size={16} />
-                  +5.2%
-                </div>
+              <div className="stat-value profit-value">₹{reportStats.profitLoss.toFixed(2)}</div>
+            </div>
+
+            <div className="stat-card discount">
+              <div className="stat-header">
+                <span className="stat-label">Total Discount</span>
               </div>
+              <div className="stat-value">₹{reportStats.totalDiscount.toFixed(2)}</div>
             </div>
           </div>
 
-          {/* Charts and Tables */}
-          <div className="reports-content">
-            <div className="chart-section">
-              <div className="section-header">
-                <h3>Sales Trend</h3>
-                <div className="chart-filters">
-                  <button className="chart-btn active">Revenue</button>
-                  <button className="chart-btn">Orders</button>
-                  <button className="chart-btn">Products</button>
-                </div>
+          {/* Sales Table */}
+          <div className="sales-table-container">
+            <div className="table-header">
+              <div className="table-title">
+                <h3>Sales Transactions</h3>
               </div>
-              <div className="chart-placeholder">
-                <BarChart3 size={48} />
-                <p>Sales chart visualization would appear here</p>
-                <small>Integration with Chart.js or similar library needed</small>
-              </div>
+              <button className="export-btn" onClick={exportReport}>
+                <Download size={16} />
+                Export CSV
+              </button>
             </div>
 
-            <div className="top-products">
-              <h3>Top Selling Products</h3>
-              <div className="products-list">
-                {inventory.slice(0, 5).map((product, index) => (
-                  <div key={product.id} className="product-item">
-                    <div className="product-rank">#{index + 1}</div>
-                    <div className="product-info">
-                      <div className="product-name">{product.name}</div>
-                      <div className="product-price">₹{product.price}</div>
-                    </div>
-                    <div className="product-sales">
-                      <div className="sales-count">{Math.floor(Math.random() * 50) + 10} sold</div>
-                      <div className="sales-revenue">₹{(product.price * (Math.floor(Math.random() * 50) + 10)).toFixed(2)}</div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* Recent Sales Table */}
-          <div className="recent-sales">
-            <h3>Recent Sales</h3>
-            <div className="sales-table">
-              <table>
+            <div className="table-wrapper">
+              <table className="sales-table">
                 <thead>
                   <tr>
-                    <th>Order ID</th>
-                    <th>Date</th>
-                    <th>Items</th>
-                    <th>Total</th>
-                    <th>Status</th>
+                    <th>BILL NUMBER</th>
+                    <th>DATE & TIME</th>
+                    <th>TOTAL</th>
+                    <th>PAYMENT</th>
+                    <th>ACTION</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {recentSales.map((sale, index) => (
-                    <tr key={sale.id || index}>
-                      <td>#{sale.id || `ORD${index + 1000}`}</td>
-                      <td>
-                        {sale.timestamp ? 
-                          new Date(sale.timestamp.seconds * 1000).toLocaleDateString() : 
-                          new Date().toLocaleDateString()
-                        }
-                      </td>
-                      <td>{sale.itemCount} items</td>
-                      <td>₹{sale.total.toFixed(2)}</td>
-                      <td>
-                        <span className="status-badge completed">Completed</span>
+                  {sales.length === 0 ? (
+                    <tr>
+                      <td colSpan="5" className="no-data">
+                        <div className="no-data-content">
+                          <FileText size={48} />
+                          <p>No sales data available</p>
+                          <small>Sales will appear here once transactions are made</small>
+                        </div>
                       </td>
                     </tr>
-                  ))}
+                  ) : (
+                    sales.map((sale, index) => (
+                      <tr key={sale.id || index}>
+                        <td className="bill-number">
+                          {generateBillNumber(sale, index)}
+                        </td>
+                        <td className="date-time">
+                          {formatDate(sale.timestamp)}
+                        </td>
+                        <td className="total-amount">
+                          ₹{(sale.total || 0).toFixed(2)}
+                        </td>
+                        <td className="payment-mode">
+                          <span className={`payment-badge ${(sale.paymentMode || 'Cash').toLowerCase()}`}>
+                            {sale.paymentMode || 'Cash'}
+                          </span>
+                        </td>
+                        <td className="action-cell">
+                          <button 
+                            className="view-details-btn"
+                            onClick={() => handleViewDetails(sale)}
+                            title="View Bill Details"
+                          >
+                            View Details
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
+
+            {sales.length > 0 && (
+              <div className="table-footer">
+                <div className="table-info">
+                  Showing {sales.length} transactions
+                </div>
+              </div>
+            )}
           </div>
         </>
       )}

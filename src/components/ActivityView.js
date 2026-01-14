@@ -28,95 +28,87 @@ const ActivityView = ({ inventory }) => {
     try {
       const salesData = await getSales(20);
       
-      // Generate mock activity data based on sales and inventory
-      const mockActivities = [
-        {
-          id: 1,
+      // Generate activity data based on real sales and inventory data
+      const activities = [];
+      
+      // Add sales activities from real data
+      salesData.forEach((sale, index) => {
+        activities.push({
+          id: `sale_${sale.id || index}`,
           type: 'sale',
           action: 'Sale Completed',
-          description: 'Order #1001 completed successfully',
-          user: 'admin@mystore.com',
-          timestamp: new Date(Date.now() - 1000 * 60 * 30), // 30 minutes ago
+          description: `Order completed with ${sale.itemCount || 0} items`,
+          user: 'cashier@mystore.com',
+          timestamp: sale.timestamp ? new Date(sale.timestamp.seconds * 1000) : new Date(),
           status: 'success',
-          details: { amount: '₹250.00', items: 3 }
-        },
-        {
-          id: 2,
-          type: 'inventory',
-          action: 'Stock Updated',
-          description: 'Product "Rice" stock updated',
-          user: 'admin@mystore.com',
-          timestamp: new Date(Date.now() - 1000 * 60 * 60), // 1 hour ago
-          status: 'info',
-          details: { product: 'Rice', oldStock: 45, newStock: 50 }
-        },
-        {
-          id: 3,
-          type: 'user',
-          action: 'User Login',
-          description: 'Admin user logged in',
-          user: 'admin@mystore.com',
-          timestamp: new Date(Date.now() - 1000 * 60 * 60 * 2), // 2 hours ago
-          status: 'info',
-          details: { ip: '192.168.1.1', device: 'Desktop' }
-        },
-        {
-          id: 4,
-          type: 'inventory',
-          action: 'Low Stock Alert',
-          description: 'Product "Milk" is running low',
-          user: 'system',
-          timestamp: new Date(Date.now() - 1000 * 60 * 60 * 3), // 3 hours ago
-          status: 'warning',
-          details: { product: 'Milk', currentStock: 5, threshold: 10 }
-        },
-        {
-          id: 5,
-          type: 'sale',
-          action: 'Sale Completed',
-          description: 'Order #1000 completed successfully',
-          user: 'demo@mystore.com',
-          timestamp: new Date(Date.now() - 1000 * 60 * 60 * 4), // 4 hours ago
-          status: 'success',
-          details: { amount: '₹180.50', items: 2 }
-        },
-        {
-          id: 6,
-          type: 'system',
-          action: 'System Backup',
-          description: 'Daily backup completed successfully',
-          user: 'system',
-          timestamp: new Date(Date.now() - 1000 * 60 * 60 * 6), // 6 hours ago
-          status: 'success',
-          details: { size: '2.5 MB', duration: '30 seconds' }
-        },
-        {
-          id: 7,
-          type: 'inventory',
-          action: 'Product Added',
-          description: 'New product "Bread" added to inventory',
-          user: 'admin@mystore.com',
-          timestamp: new Date(Date.now() - 1000 * 60 * 60 * 8), // 8 hours ago
-          status: 'success',
-          details: { product: 'Bread', price: '₹25.00', stock: 30 }
+          details: { 
+            amount: `₹${(sale.total || 0).toFixed(2)}`, 
+            items: sale.itemCount || 0,
+            orderId: sale.id || `ORD${index + 1000}`
+          }
+        });
+      });
+
+      // Add inventory activities based on current inventory
+      inventory.forEach((item, index) => {
+        if (item.stock <= 5) {
+          activities.push({
+            id: `inventory_low_${item.id}`,
+            type: 'inventory',
+            action: 'Low Stock Alert',
+            description: `Product "${item.name}" is running low`,
+            user: 'system',
+            timestamp: new Date(Date.now() - Math.random() * 24 * 60 * 60 * 1000), // Random time within last 24h
+            status: item.stock === 0 ? 'error' : 'warning',
+            details: { 
+              product: item.name, 
+              currentStock: item.stock, 
+              threshold: 10,
+              price: `₹${item.price.toFixed(2)}`
+            }
+          });
         }
-      ];
+      });
 
-      // Add sales activities
-      const salesActivities = salesData.slice(0, 5).map((sale, index) => ({
-        id: `sale_${index}`,
-        type: 'sale',
-        action: 'Sale Completed',
-        description: `Order completed with ${sale.itemCount} items`,
-        user: 'cashier@mystore.com',
-        timestamp: sale.timestamp ? new Date(sale.timestamp.seconds * 1000) : new Date(),
+      // Add some system activities
+      activities.push({
+        id: 'system_backup',
+        type: 'system',
+        action: 'System Backup',
+        description: 'Daily backup completed successfully',
+        user: 'system',
+        timestamp: new Date(Date.now() - 6 * 60 * 60 * 1000), // 6 hours ago
         status: 'success',
-        details: { amount: `₹${sale.total.toFixed(2)}`, items: sale.itemCount }
-      }));
+        details: { 
+          size: `${(Math.random() * 5 + 1).toFixed(1)} MB`, 
+          duration: `${Math.floor(Math.random() * 60 + 30)} seconds`,
+          type: 'Automated'
+        }
+      });
 
-      setActivities([...mockActivities, ...salesActivities]);
+      activities.push({
+        id: 'user_login',
+        type: 'user',
+        action: 'User Login',
+        description: 'Admin user logged in',
+        user: 'admin@mystore.com',
+        timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000), // 2 hours ago
+        status: 'info',
+        details: { 
+          ip: '192.168.1.1', 
+          device: 'Desktop',
+          browser: 'Chrome'
+        }
+      });
+
+      // Sort activities by timestamp (newest first)
+      activities.sort((a, b) => b.timestamp - a.timestamp);
+      
+      setActivities(activities);
     } catch (error) {
       console.error('Error loading activity data:', error);
+      // Set empty activities on error
+      setActivities([]);
     } finally {
       setLoading(false);
     }
@@ -153,9 +145,10 @@ const ActivityView = ({ inventory }) => {
     const hours = Math.floor(diff / (1000 * 60 * 60));
     const days = Math.floor(diff / (1000 * 60 * 60 * 24));
 
-    if (minutes < 60) return `${minutes} minutes ago`;
-    if (hours < 24) return `${hours} hours ago`;
-    return `${days} days ago`;
+    if (minutes < 1) return 'Just now';
+    if (minutes < 60) return `${minutes} minute${minutes > 1 ? 's' : ''} ago`;
+    if (hours < 24) return `${hours} hour${hours > 1 ? 's' : ''} ago`;
+    return `${days} day${days > 1 ? 's' : ''} ago`;
   };
 
   const activityStats = {

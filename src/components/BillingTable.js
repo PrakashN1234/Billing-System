@@ -1,15 +1,51 @@
 import { useState } from 'react';
-import { Trash2, Receipt, AlertCircle } from 'lucide-react';
+import { Trash2, Receipt, AlertCircle, Camera, Package, Printer, Download, FileText, X } from 'lucide-react';
 import { saveSale, updateStock } from '../services/firebaseService';
+import BarcodeScanner from './BarcodeScanner';
+import { printBill, downloadBill, generatePDF } from '../utils/billGenerator';
 
-const BillingTable = ({ cart, inventory, updateQty, removeItem, clearCart }) => {
+const BillingTable = ({ cart, inventory, updateQty, removeItem, clearCart, addToCart }) => {
   const [isProcessing, setIsProcessing] = useState(false);
+  const [productCode, setProductCode] = useState('');
+  const [discount, setDiscount] = useState(0);
+  const [paymentMode, setPaymentMode] = useState('Cash');
+  const [scannerActive, setScannerActive] = useState(false);
+  const [showBillActions, setShowBillActions] = useState(false);
+  const [lastBillData, setLastBillData] = useState(null);
 
   const subtotal = cart.reduce((acc, item) => acc + (item.price * item.qty), 0);
-  const tax = subtotal * 0.05;
-  const total = subtotal + tax;
+  const gst = subtotal * 0.18; // 18% GST for India
+  const discountAmount = (subtotal * discount) / 100;
+  const total = subtotal + gst - discountAmount;
 
-  const handlePrintBill = async () => {
+  const handleFetchProduct = () => {
+    if (!productCode.trim()) {
+      alert('Please enter a product code');
+      return;
+    }
+
+    const product = inventory.find(p => 
+      p.id.toLowerCase() === productCode.toLowerCase() || 
+      p.name.toLowerCase().includes(productCode.toLowerCase())
+    );
+
+    if (product) {
+      if (product.stock > 0) {
+        addToCart(product);
+        setProductCode('');
+      } else {
+        alert('Product is out of stock!');
+      }
+    } else {
+      alert('Product not found!');
+    }
+  };
+
+  const handleScannerToggle = () => {
+    setScannerActive(!scannerActive);
+  };
+
+  const handleCompleteCheckout = async () => {
     if (cart.length === 0) {
       alert('Cart is empty!');
       return;
@@ -27,9 +63,12 @@ const BillingTable = ({ cart, inventory, updateQty, removeItem, clearCart }) => 
           total: item.price * item.qty
         })),
         subtotal: subtotal,
-        tax: tax,
+        gst: gst,
+        discount: discountAmount,
         total: total,
-        itemCount: cart.reduce((acc, item) => acc + item.qty, 0)
+        paymentMode: paymentMode,
+        itemCount: cart.reduce((acc, item) => acc + item.qty, 0),
+        timestamp: Date.now()
       };
 
       // Save sale to Firebase
@@ -46,9 +85,13 @@ const BillingTable = ({ cart, inventory, updateQty, removeItem, clearCart }) => 
 
       await updateStock(stockUpdates);
 
-      // Clear cart and show success
+      // Store bill data for printing/downloading
+      setLastBillData(saleData);
+      
+      // Clear cart and show success with bill options
       clearCart();
-      alert(`Bill processed successfully!\nTotal: $${total.toFixed(2)}\nItems sold: ${saleData.itemCount}`);
+      setDiscount(0);
+      setShowBillActions(true);
       
     } catch (error) {
       console.error('Error processing sale:', error);
@@ -56,6 +99,29 @@ const BillingTable = ({ cart, inventory, updateQty, removeItem, clearCart }) => 
     } finally {
       setIsProcessing(false);
     }
+  };
+
+  const handlePrintBill = () => {
+    if (lastBillData) {
+      printBill(lastBillData);
+    }
+  };
+
+  const handleDownloadBill = () => {
+    if (lastBillData) {
+      downloadBill(lastBillData);
+    }
+  };
+
+  const handleDownloadPDF = () => {
+    if (lastBillData) {
+      generatePDF(lastBillData);
+    }
+  };
+
+  const closeBillActions = () => {
+    setShowBillActions(false);
+    setLastBillData(null);
   };
 
   const getStockWarning = (item) => {
@@ -72,44 +138,174 @@ const BillingTable = ({ cart, inventory, updateQty, removeItem, clearCart }) => 
   };
 
   return (
-    <section className="billing-area">
-      <div className="card">
-        <div className="card-header">
-          <h2>Current Bill</h2>
-          <button className="btn-clear" onClick={clearCart} disabled={isProcessing}>
-            Clear All
-          </button>
+    <div className="billing-container">
+      {/* Product Scanner Section */}
+      <div className="scanner-section">
+        <div className="scanner-card">
+          <div className="scanner-header">
+            <Camera size={20} />
+            <h2>Product Scanner (Demo)</h2>
+          </div>
+          
+          <div className="scanner-info">
+            <AlertCircle size={16} />
+            <p>For demonstration purposes, we use system-defined product codes scanned via laptop camera. This can be easily extended to real barcode scanners in production.</p>
+          </div>
+
+          <div className="camera-section">
+            <h3>Camera Scanner</h3>
+            <div className="camera-preview">
+              <div className="camera-placeholder">
+                <Camera size={48} />
+                <p>Camera will appear here</p>
+              </div>
+            </div>
+            
+            <button 
+              className={`scanner-btn ${scannerActive ? 'active' : 'inactive'}`}
+              onClick={handleScannerToggle}
+              disabled={isProcessing}
+            >
+              {scannerActive ? 'Close Scanner' : 'Open Scanner'}
+            </button>
+          </div>
+
+          <div className="manual-entry">
+            <h3>Product Code (Manual Entry)</h3>
+            <input
+              type="text"
+              placeholder="E.G., RICE100, SUG123"
+              value={productCode}
+              onChange={(e) => setProductCode(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleFetchProduct()}
+              disabled={isProcessing}
+              className="product-code-input"
+            />
+            <button 
+              className="fetch-btn"
+              onClick={handleFetchProduct}
+              disabled={isProcessing}
+            >
+              Fetch Product
+            </button>
+          </div>
+
+          <div className="product-list-section">
+            <div className="list-header">
+              <Package size={20} />
+              <h3>Or Select from List</h3>
+            </div>
+            
+            <div className="product-selector">
+              <select 
+                onChange={(e) => {
+                  const product = inventory.find(p => p.id === e.target.value);
+                  if (product && product.stock > 0) {
+                    addToCart(product);
+                  }
+                }}
+                disabled={isProcessing}
+                className="product-select"
+              >
+                <option value="">Select Product</option>
+                {inventory.map(product => (
+                  <option 
+                    key={product.id} 
+                    value={product.id}
+                    disabled={product.stock === 0}
+                  >
+                    {product.name} - ₹{product.price} {product.stock === 0 ? '(Out of Stock)' : `(${product.stock} available)`}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
         </div>
-        <div className="table-wrapper">
-          <table>
-            <thead>
-              <tr>
-                <th>Item</th>
-                <th>Price</th>
-                <th>Qty</th>
-                <th>Stock</th>
-                <th>Total</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
+      </div>
+
+      {/* Bill Summary Section */}
+      <div className="bill-summary-section">
+        <div className="bill-summary-card">
+          <div className="bill-header">
+            <Receipt size={20} />
+            <h2>Bill Summary</h2>
+          </div>
+
+          <div className="bill-details">
+            <div className="bill-row">
+              <span>Subtotal:</span>
+              <span>₹{subtotal.toFixed(2)}</span>
+            </div>
+            
+            <div className="bill-row">
+              <span>GST:</span>
+              <span>₹{gst.toFixed(2)}</span>
+            </div>
+
+            <div className="discount-section">
+              <label>Discount (%)</label>
+              <input
+                type="number"
+                min="0"
+                max="100"
+                value={discount}
+                onChange={(e) => setDiscount(Math.max(0, Math.min(100, parseFloat(e.target.value) || 0)))}
+                disabled={isProcessing}
+                className="discount-input"
+              />
+            </div>
+
+            <div className="bill-row total-row">
+              <span>Total:</span>
+              <span>₹{total.toFixed(2)}</span>
+            </div>
+
+            <div className="payment-section">
+              <label>Payment Mode</label>
+              <select
+                value={paymentMode}
+                onChange={(e) => setPaymentMode(e.target.value)}
+                disabled={isProcessing}
+                className="payment-select"
+              >
+                <option value="Cash">Cash</option>
+                <option value="Card">Card</option>
+                <option value="UPI">UPI</option>
+                <option value="Net Banking">Net Banking</option>
+              </select>
+            </div>
+
+            <button
+              className="complete-checkout-btn"
+              onClick={handleCompleteCheckout}
+              disabled={cart.length === 0 || isProcessing}
+            >
+              {isProcessing ? 'Processing...' : 'Complete Checkout'}
+            </button>
+          </div>
+        </div>
+
+        {cart.length > 0 && (
+          <div className="cart-items">
+            <h3>Cart Items ({cart.reduce((acc, item) => acc + item.qty, 0)})</h3>
+            <div className="cart-list">
               {cart.map(item => {
                 const product = inventory.find(p => p.id === item.id);
                 const stockWarning = getStockWarning(item);
                 
                 return (
-                  <tr key={item.id} className={stockWarning ? 'stock-warning' : ''}>
-                    <td>
-                      {item.name}
+                  <div key={item.id} className={`cart-item ${stockWarning ? 'stock-warning' : ''}`}>
+                    <div className="item-info">
+                      <span className="item-name">{item.name}</span>
+                      <span className="item-price">₹{item.price.toFixed(2)} x {item.qty}</span>
                       {stockWarning && (
                         <div className="warning-text">
-                          <AlertCircle size={14} />
+                          <AlertCircle size={12} />
                           {stockWarning}
                         </div>
                       )}
-                    </td>
-                    <td>${item.price.toFixed(2)}</td>
-                    <td>
+                    </div>
+                    <div className="item-controls">
                       <input 
                         type="number" 
                         className="qty-input"
@@ -119,53 +315,105 @@ const BillingTable = ({ cart, inventory, updateQty, removeItem, clearCart }) => 
                         onChange={(e) => updateQty(item.id, e.target.value)} 
                         disabled={isProcessing}
                       />
-                    </td>
-                    <td className={product?.stock < 10 ? 'low-stock' : ''}>
-                      {product?.stock || 0}
-                    </td>
-                    <td>${(item.price * item.qty).toFixed(2)}</td>
-                    <td>
+                      <span className="item-total">₹{(item.price * item.qty).toFixed(2)}</span>
                       <button 
-                        className="btn-remove" 
+                        className="remove-btn" 
                         onClick={() => removeItem(item.id)}
                         disabled={isProcessing}
                       >
-                        <Trash2 size={16} />
+                        <Trash2 size={14} />
                       </button>
-                    </td>
-                  </tr>
+                    </div>
+                  </div>
                 );
               })}
-            </tbody>
-          </table>
-          {cart.length === 0 && (
-            <div className="empty-cart">
-              <p>Cart is empty. Add items from inventory to start billing.</p>
             </div>
-          )}
-        </div>
-        <div className="summary">
-          <p>Items: <span>{cart.reduce((acc, item) => acc + item.qty, 0)}</span></p>
-          <p>Subtotal: <span>${subtotal.toFixed(2)}</span></p>
-          <p>Tax (5%): <span>${tax.toFixed(2)}</span></p>
-          <h3 className="total">Total: <span>${total.toFixed(2)}</span></h3>
-          <button 
-            className="btn-pay" 
-            onClick={handlePrintBill}
-            disabled={cart.length === 0 || isProcessing}
-          >
-            {isProcessing ? (
-              <>Processing...</>
-            ) : (
-              <>
-                <Receipt size={20} />
-                PROCESS SALE
-              </>
-            )}
-          </button>
-        </div>
+            <button className="clear-cart-btn" onClick={clearCart} disabled={isProcessing}>
+              Clear All Items
+            </button>
+          </div>
+        )}
       </div>
-    </section>
+
+      {/* Bill Actions Modal */}
+      {showBillActions && lastBillData && (
+        <div className="bill-actions-overlay">
+          <div className="bill-actions-modal">
+            <div className="bill-actions-header">
+              <Receipt size={24} />
+              <h3>Bill Processed Successfully!</h3>
+              <button className="close-btn" onClick={closeBillActions}>
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div className="bill-summary">
+              <div className="success-message">
+                <div className="success-icon">✓</div>
+                <div className="success-details">
+                  <p><strong>Total Amount: ₹{lastBillData.total.toFixed(2)}</strong></p>
+                  <p>Payment Mode: {lastBillData.paymentMode}</p>
+                  <p>Items: {lastBillData.itemCount}</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="bill-actions">
+              <h4>Choose an action:</h4>
+              <div className="action-buttons">
+                <button 
+                  className="action-btn print-btn"
+                  onClick={handlePrintBill}
+                >
+                  <Printer size={20} />
+                  Print Bill
+                </button>
+                
+                <button 
+                  className="action-btn download-btn"
+                  onClick={handleDownloadBill}
+                >
+                  <Download size={20} />
+                  Download HTML
+                </button>
+                
+                <button 
+                  className="action-btn pdf-btn"
+                  onClick={handleDownloadPDF}
+                >
+                  <FileText size={20} />
+                  Save as PDF
+                </button>
+              </div>
+              
+              <div className="action-info">
+                <p><strong>Print Bill:</strong> Opens print dialog for immediate printing</p>
+                <p><strong>Download HTML:</strong> Downloads bill as HTML file</p>
+                <p><strong>Save as PDF:</strong> Opens print dialog - select "Save as PDF"</p>
+              </div>
+              
+              <button 
+                className="continue-btn"
+                onClick={closeBillActions}
+              >
+                Continue Shopping
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Barcode Scanner */}
+      <BarcodeScanner 
+        isActive={scannerActive}
+        onScan={(code) => {
+          setProductCode(code);
+          handleFetchProduct();
+          setScannerActive(false);
+        }}
+        onClose={() => setScannerActive(false)}
+      />
+    </div>
   );
 };
 

@@ -55,7 +55,7 @@ const InventorySidebar = ({ inventory, addToCart }) => {
         ) : (
           filtered.map(product => (
             <div 
-              className={`product-item ${getStockStatus(product.stock)}`} 
+              className={`product-item ₹{getStockStatus(product.stock)}`} 
               key={product.id} 
               onClick={() => addToCart(product)}
             >
@@ -65,14 +65,14 @@ const InventorySidebar = ({ inventory, addToCart }) => {
                   {getStockIcon(product.stock)}
                 </div>
                 <div className="product-details">
-                  <span className="price">${product.price.toFixed(2)}</span>
-                  <span className={`stock ${getStockStatus(product.stock)}`}>
+                  <span className="price">₹{product.price.toFixed(2)}</span>
+                  <span className={`stock ₹{getStockStatus(product.stock)}`}>
                     Stock: {product.stock}
                   </span>
                 </div>
               </div>
               <Plus 
-                className={`plus-icon ${product.stock === 0 ? 'disabled' : ''}`} 
+                className={`plus-icon ₹{product.stock === 0 ? 'disabled' : ''}`} 
                 size={18} 
               />
             </div>

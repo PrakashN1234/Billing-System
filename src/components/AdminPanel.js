@@ -167,7 +167,7 @@ const AdminPanel = ({ inventory, onClose }) => {
                             onBlur={(e) => handleUpdateProduct(product.id, { price: parseFloat(e.target.value) })}
                           />
                         ) : (
-                          `$${product.price.toFixed(2)}`
+                          `₹${(product.price || 0).toFixed(2)}`
                         )}
                       </td>
                       <td>
@@ -219,11 +219,11 @@ const AdminPanel = ({ inventory, onClose }) => {
                   {sales.map(sale => (
                     <div key={sale.id} className="sale-item">
                       <div className="sale-header">
-                        <span className="sale-total">${sale.total.toFixed(2)}</span>
+                        <span className="sale-total">₹{(sale.total || 0).toFixed(2)}</span>
                         <span className="sale-date">{formatDate(sale.timestamp)}</span>
                       </div>
                       <div className="sale-details">
-                        <p>{sale.itemCount} items • Tax: ${sale.tax.toFixed(2)}</p>
+                        <p>{sale.itemCount} items • Tax: ₹{(sale.tax || sale.gst || 0).toFixed(2)}</p>
                         <div className="sale-items">
                           {sale.items.map((item, index) => (
                             <span key={index} className="sale-item-tag">

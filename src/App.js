@@ -15,6 +15,7 @@ import LoadingSpinner from './components/LoadingSpinner';
 import { subscribeToInventory } from './services/firebaseService';
 import { initializeInventory } from './utils/initializeData';
 import './utils/testConnection';
+import './utils/testFirebase'; // Add Firebase testing utility
 import './App.css';
 
 const MainApp = () => {
@@ -135,7 +136,7 @@ const MainApp = () => {
   const renderActiveView = () => {
     switch (activeView) {
       case 'dashboard':
-        return <Dashboard inventory={inventory} currentUser={currentUser} />;
+        return <Dashboard inventory={inventory} setActiveView={setActiveView} />;
       case 'stores':
         return <StoresView />;
       case 'users':
@@ -150,7 +151,8 @@ const MainApp = () => {
               inventory={inventory}
               updateQty={updateQty} 
               removeItem={removeItem} 
-              clearCart={clearCart} 
+              clearCart={clearCart}
+              addToCart={addToCart}
             />
             <InventorySidebar 
               inventory={inventory} 

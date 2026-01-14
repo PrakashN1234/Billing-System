@@ -5,15 +5,17 @@ import {
   Edit, 
   Plus,
   RefreshCw,
-  Filter,
   Search
 } from 'lucide-react';
+import BulkRestockModal from './BulkRestockModal';
+import { updateProduct } from '../services/firebaseService';
 
 const LowStockView = ({ inventory }) => {
   const [lowStockItems, setLowStockItems] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [stockThreshold, setStockThreshold] = useState(10);
   const [sortBy, setSortBy] = useState('stock');
+  const [showBulkModal, setShowBulkModal] = useState(false);
 
   useEffect(() => {
     filterLowStockItems();
@@ -52,9 +54,25 @@ const LowStockView = ({ inventory }) => {
     return { status: 'normal', label: 'Normal', color: 'success' };
   };
 
-  const handleRestockItem = (itemId) => {
-    // Mock restock functionality
-    alert(`Restock request sent for item ID: ${itemId}`);
+  const handleRestockItem = async (itemId, itemName) => {
+    const restockAmount = prompt(`Enter restock quantity for ${itemName}:`, '50');
+    if (restockAmount && !isNaN(restockAmount) && parseInt(restockAmount) > 0) {
+      try {
+        const currentItem = inventory.find(item => item.id === itemId);
+        if (currentItem) {
+          await updateProduct(itemId, { 
+            stock: currentItem.stock + parseInt(restockAmount),
+            lastRestocked: new Date()
+          });
+          alert(`Successfully restocked ${itemName}: +${restockAmount} units`);
+          // Refresh the page to show updated stock
+          window.location.reload();
+        }
+      } catch (error) {
+        console.error('Error restocking item:', error);
+        alert('Error occurred while restocking. Please try again.');
+      }
+    }
   };
 
   const handleBulkRestock = () => {
@@ -62,7 +80,12 @@ const LowStockView = ({ inventory }) => {
       alert('No items to restock');
       return;
     }
-    alert(`Bulk restock request sent for ${lowStockItems.length} items`);
+    setShowBulkModal(true);
+  };
+
+  const handleRestockComplete = (restockedItems) => {
+    // Refresh the page to show updated inventory
+    window.location.reload();
   };
 
   const criticalItems = lowStockItems.filter(item => item.stock <= 5);
@@ -194,21 +217,24 @@ const LowStockView = ({ inventory }) => {
                       </div>
                     </td>
                     <td>
-                      <span className={`status-badge ${stockInfo.color}`}>
+                      <span className={`status-badge ₹{stockInfo.color}`}>
                         {stockInfo.label}
                       </span>
                     </td>
                     <td>₹{item.price.toFixed(2)}</td>
                     <td>
                       <span className="last-updated">
-                        {new Date().toLocaleDateString()}
+                        {item.updatedAt ? 
+                          new Date(item.updatedAt.seconds * 1000).toLocaleDateString('en-IN') :
+                          new Date().toLocaleDateString('en-IN')
+                        }
                       </span>
                     </td>
                     <td>
                       <div className="action-buttons">
                         <button 
                           className="btn-icon"
-                          onClick={() => handleRestockItem(item.id)}
+                          onClick={() => handleRestockItem(item.id, item.name)}
                           title="Restock Item"
                         >
                           <Plus size={16} />
@@ -235,7 +261,7 @@ const LowStockView = ({ inventory }) => {
               <div key={item.id} className="recommendation-card">
                 <div className="rec-header">
                   <span className="product-name">{item.name}</span>
-                  <span className={`stock-badge ${getStockStatus(item.stock).color}`}>
+                  <span className={`stock-badge ₹{getStockStatus(item.stock).color}`}>
                     {item.stock} left
                   </span>
                 </div>
@@ -251,7 +277,7 @@ const LowStockView = ({ inventory }) => {
                 </div>
                 <button 
                   className="rec-action"
-                  onClick={() => handleRestockItem(item.id)}
+                  onClick={() => handleRestockItem(item.id, item.name)}
                 >
                   Request Restock
                 </button>
@@ -260,6 +286,14 @@ const LowStockView = ({ inventory }) => {
           </div>
         </div>
       )}
+
+      {/* Bulk Restock Modal */}
+      <BulkRestockModal
+        isOpen={showBulkModal}
+        onClose={() => setShowBulkModal(false)}
+        lowStockItems={lowStockItems}
+        onRestockComplete={handleRestockComplete}
+      />
     </div>
   );
 };
