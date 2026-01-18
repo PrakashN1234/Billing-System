@@ -2,9 +2,6 @@
 
 A modern, real-time supermarket billing and inventory management system built with React and Firebase. This application provides a complete point-of-sale solution with inventory tracking, sales management, and administrative controls.
 
-## 🚀 Live Demo
-
-Visit the live application: [https://PrakashN1234.github.io/Billing-System](https://PrakashN1234.github.io/Billing-System)
 
 ## ✨ Features
 
@@ -168,4 +165,5 @@ This project is open source and available under the [MIT License](LICENSE).
 # SupermarketBilling
 # Store-Billing
 # Billing-System
+
 
