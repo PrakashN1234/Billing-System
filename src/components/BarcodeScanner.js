@@ -4,7 +4,6 @@ import { Camera, X, CheckCircle } from 'lucide-react';
 const BarcodeScanner = ({ onScan, onClose, isActive }) => {
   const [hasPermission, setHasPermission] = useState(null);
   const [error, setError] = useState(null);
-  const [isScanning, setIsScanning] = useState(false);
   const videoRef = useRef(null);
   const streamRef = useRef(null);
 
@@ -23,7 +22,6 @@ const BarcodeScanner = ({ onScan, onClose, isActive }) => {
   const startCamera = async () => {
     try {
       setError(null);
-      setIsScanning(true);
 
       // Check if getUserMedia is supported
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
@@ -51,7 +49,6 @@ const BarcodeScanner = ({ onScan, onClose, isActive }) => {
       console.error('Camera error:', err);
       setError(err.message);
       setHasPermission(false);
-      setIsScanning(false);
     }
   };
 
@@ -63,7 +60,6 @@ const BarcodeScanner = ({ onScan, onClose, isActive }) => {
     if (videoRef.current) {
       videoRef.current.srcObject = null;
     }
-    setIsScanning(false);
   };
 
   const handleManualInput = (code) => {

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { 
   Activity, 
   User, 
@@ -19,288 +19,169 @@ const ActivityView = ({ inventory }) => {
   const [filterType, setFilterType] = useState('all');
   const [dateFilter, setDateFilter] = useState('today');
 
-  useEffect(() => {
-    loadActivityData();
-  }, []);
-
-  const loadActivityData = async () => {
+  const loadActivityData = useCallback(async () => {
     setLoading(true);
     try {
       const salesData = await getSales(20);
       
-      // Generate activity data based on real sales and inventory data
-      const activities = [];
-      
-      // Add sales activities from real data
-      salesData.forEach((sale, index) => {
-        activities.push({
-          id: `sale_${sale.id || index}`,
-          type: 'sale',
-          action: 'Sale Completed',
-          description: `Order completed with ${sale.itemCount || 0} items`,
-          user: 'cashier@mystore.com',
-          timestamp: sale.timestamp ? new Date(sale.timestamp.seconds * 1000) : new Date(),
-          status: 'success',
-          details: { 
-            amount: `₹${(sale.total || 0).toFixed(2)}`, 
-            items: sale.itemCount || 0,
-            orderId: sale.id || `ORD${index + 1000}`
-          }
-        });
-      });
+      // Convert sales to activity format
+      const activities = salesData.map((sale, index) => ({
+        id: sale.id || `activity-${index}`,
+        type: 'sale',
+        description: `Sale completed - ${sale.itemCount || 0} items`,
+        amount: sale.total || 0,
+        timestamp: sale.timestamp ? 
+          (sale.timestamp.seconds ? new Date(sale.timestamp.seconds * 1000) : new Date(sale.timestamp)) : 
+          new Date(),
+        status: 'completed',
+        user: 'System'
+      }));
 
-      // Add inventory activities based on current inventory
-      inventory.forEach((item, index) => {
-        if (item.stock <= 5) {
-          activities.push({
-            id: `inventory_low_${item.id}`,
-            type: 'inventory',
-            action: 'Low Stock Alert',
-            description: `Product "${item.name}" is running low`,
-            user: 'system',
-            timestamp: new Date(Date.now() - Math.random() * 24 * 60 * 60 * 1000), // Random time within last 24h
-            status: item.stock === 0 ? 'error' : 'warning',
-            details: { 
-              product: item.name, 
-              currentStock: item.stock, 
-              threshold: 10,
-              price: `₹${item.price.toFixed(2)}`
-            }
-          });
-        }
-      });
-
-      // Add some system activities
-      activities.push({
-        id: 'system_backup',
-        type: 'system',
-        action: 'System Backup',
-        description: 'Daily backup completed successfully',
-        user: 'system',
-        timestamp: new Date(Date.now() - 6 * 60 * 60 * 1000), // 6 hours ago
-        status: 'success',
-        details: { 
-          size: `${(Math.random() * 5 + 1).toFixed(1)} MB`, 
-          duration: `${Math.floor(Math.random() * 60 + 30)} seconds`,
-          type: 'Automated'
-        }
-      });
-
-      activities.push({
-        id: 'user_login',
-        type: 'user',
-        action: 'User Login',
-        description: 'Admin user logged in',
-        user: 'admin@mystore.com',
-        timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000), // 2 hours ago
-        status: 'info',
-        details: { 
-          ip: '192.168.1.1', 
-          device: 'Desktop',
-          browser: 'Chrome'
-        }
-      });
-
-      // Sort activities by timestamp (newest first)
-      activities.sort((a, b) => b.timestamp - a.timestamp);
-      
       setActivities(activities);
     } catch (error) {
       console.error('Error loading activity data:', error);
-      // Set empty activities on error
       setActivities([]);
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    loadActivityData();
+  }, [loadActivityData]);
 
   const getActivityIcon = (type) => {
     switch (type) {
-      case 'sale': return ShoppingCart;
-      case 'inventory': return Package;
-      case 'user': return User;
-      case 'system': return Settings;
-      default: return Activity;
+      case 'sale': return <ShoppingCart size={16} />;
+      case 'inventory': return <Package size={16} />;
+      case 'user': return <User size={16} />;
+      case 'system': return <Settings size={16} />;
+      default: return <Activity size={16} />;
     }
   };
 
   const getStatusIcon = (status) => {
     switch (status) {
-      case 'success': return CheckCircle;
-      case 'warning': return AlertCircle;
-      case 'error': return AlertCircle;
-      default: return Clock;
+      case 'completed':
+      case 'success': return <CheckCircle size={16} className="text-green-500" />;
+      case 'warning': return <AlertCircle size={16} className="text-yellow-500" />;
+      case 'error': return <AlertCircle size={16} className="text-red-500" />;
+      default: return <Clock size={16} className="text-blue-500" />;
     }
   };
 
   const filteredActivities = activities.filter(activity => {
-    if (filterType === 'all') return true;
-    return activity.type === filterType;
+    if (filterType !== 'all' && activity.type !== filterType) return false;
+    return true;
   });
 
-  const formatTimeAgo = (timestamp) => {
+  const formatTime = (timestamp) => {
     const now = new Date();
-    const diff = now - timestamp;
-    const minutes = Math.floor(diff / (1000 * 60));
-    const hours = Math.floor(diff / (1000 * 60 * 60));
-    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+    const diff = now - new Date(timestamp);
+    const minutes = Math.floor(diff / 60000);
+    const hours = Math.floor(minutes / 60);
+    const days = Math.floor(hours / 24);
 
-    if (minutes < 1) return 'Just now';
-    if (minutes < 60) return `${minutes} minute${minutes > 1 ? 's' : ''} ago`;
-    if (hours < 24) return `${hours} hour${hours > 1 ? 's' : ''} ago`;
-    return `${days} day${days > 1 ? 's' : ''} ago`;
-  };
-
-  const activityStats = {
-    total: activities.length,
-    sales: activities.filter(a => a.type === 'sale').length,
-    inventory: activities.filter(a => a.type === 'inventory').length,
-    users: activities.filter(a => a.type === 'user').length,
-    system: activities.filter(a => a.type === 'system').length
+    if (days > 0) return `${days}d ago`;
+    if (hours > 0) return `${hours}h ago`;
+    if (minutes > 0) return `${minutes}m ago`;
+    return 'Just now';
   };
 
   return (
     <div className="activity-view">
       <div className="view-header">
-        <h1>Activity Log</h1>
+        <div className="header-left">
+          <Activity size={24} />
+          <h1>Activity Log</h1>
+        </div>
         <div className="header-actions">
-          <button className="btn-secondary" onClick={loadActivityData}>
-            <Activity size={20} />
-            Refresh
-          </button>
-        </div>
-      </div>
-
-      {/* Activity Stats */}
-      <div className="activity-stats">
-        <div className="stat-item">
-          <div className="stat-icon total">
-            <Activity size={20} />
+          <div className="filter-group">
+            <Filter size={16} />
+            <select 
+              value={filterType} 
+              onChange={(e) => setFilterType(e.target.value)}
+              className="filter-select"
+            >
+              <option value="all">All Activities</option>
+              <option value="sale">Sales</option>
+              <option value="inventory">Inventory</option>
+              <option value="user">Users</option>
+              <option value="system">System</option>
+            </select>
           </div>
-          <div className="stat-content">
-            <div className="stat-number">{activityStats.total}</div>
-            <div className="stat-label">Total Activities</div>
-          </div>
-        </div>
-
-        <div className="stat-item">
-          <div className="stat-icon sales">
-            <ShoppingCart size={20} />
-          </div>
-          <div className="stat-content">
-            <div className="stat-number">{activityStats.sales}</div>
-            <div className="stat-label">Sales</div>
-          </div>
-        </div>
-
-        <div className="stat-item">
-          <div className="stat-icon inventory">
-            <Package size={20} />
-          </div>
-          <div className="stat-content">
-            <div className="stat-number">{activityStats.inventory}</div>
-            <div className="stat-label">Inventory</div>
-          </div>
-        </div>
-
-        <div className="stat-item">
-          <div className="stat-icon users">
-            <User size={20} />
-          </div>
-          <div className="stat-content">
-            <div className="stat-number">{activityStats.users}</div>
-            <div className="stat-label">User Actions</div>
+          <div className="filter-group">
+            <Calendar size={16} />
+            <select 
+              value={dateFilter} 
+              onChange={(e) => setDateFilter(e.target.value)}
+              className="filter-select"
+            >
+              <option value="today">Today</option>
+              <option value="week">This Week</option>
+              <option value="month">This Month</option>
+              <option value="all">All Time</option>
+            </select>
           </div>
         </div>
       </div>
 
-      {/* Filters */}
-      <div className="activity-filters">
-        <div className="filter-group">
-          <Filter size={16} />
-          <select value={filterType} onChange={(e) => setFilterType(e.target.value)}>
-            <option value="all">All Activities</option>
-            <option value="sale">Sales</option>
-            <option value="inventory">Inventory</option>
-            <option value="user">User Actions</option>
-            <option value="system">System</option>
-          </select>
+      {loading ? (
+        <div className="loading-state">
+          <div className="loading-spinner"></div>
+          <p>Loading activities...</p>
         </div>
-
-        <div className="filter-group">
-          <Calendar size={16} />
-          <select value={dateFilter} onChange={(e) => setDateFilter(e.target.value)}>
-            <option value="today">Today</option>
-            <option value="week">This Week</option>
-            <option value="month">This Month</option>
-            <option value="all">All Time</option>
-          </select>
-        </div>
-      </div>
-
-      {/* Activity Timeline */}
-      <div className="activity-timeline">
-        {loading ? (
-          <div className="loading-state">
-            <Activity size={48} />
-            <p>Loading activities...</p>
+      ) : (
+        <div className="activities-container">
+          <div className="activities-summary">
+            <div className="summary-card">
+              <span className="summary-number">{filteredActivities.length}</span>
+              <span className="summary-label">Total Activities</span>
+            </div>
+            <div className="summary-card">
+              <span className="summary-number">{filteredActivities.filter(a => a.type === 'sale').length}</span>
+              <span className="summary-label">Sales</span>
+            </div>
+            <div className="summary-card">
+              <span className="summary-number">{filteredActivities.filter(a => a.status === 'completed').length}</span>
+              <span className="summary-label">Completed</span>
+            </div>
           </div>
-        ) : filteredActivities.length === 0 ? (
-          <div className="no-activities">
-            <Activity size={48} />
-            <p>No activities found</p>
-            <small>Activities will appear here as they occur</small>
-          </div>
-        ) : (
-          filteredActivities.map((activity) => {
-            const ActivityIcon = getActivityIcon(activity.type);
-            const StatusIcon = getStatusIcon(activity.status);
-            
-            return (
-              <div key={activity.id} className={`activity-item ${activity.status}`}>
-                <div className="activity-icon">
-                  <ActivityIcon size={20} />
-                </div>
-                
-                <div className="activity-content">
-                  <div className="activity-header">
-                    <div className="activity-title">
-                      <span className="action">{activity.action}</span>
-                      <div className="activity-status">
-                        <StatusIcon size={16} />
-                      </div>
-                    </div>
-                    <div className="activity-time">
-                      {formatTimeAgo(activity.timestamp)}
-                    </div>
-                  </div>
-                  
-                  <div className="activity-description">
-                    {activity.description}
-                  </div>
-                  
-                  <div className="activity-meta">
-                    <span className="activity-user">
-                      <User size={14} />
-                      {activity.user}
-                    </span>
-                    
-                    {activity.details && (
-                      <div className="activity-details">
-                        {Object.entries(activity.details).map(([key, value]) => (
-                          <span key={key} className="detail-item">
-                            <strong>{key}:</strong> {value}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
+
+          <div className="activities-list">
+            {filteredActivities.length === 0 ? (
+              <div className="no-activities">
+                <Activity size={48} />
+                <h3>No Activities Found</h3>
+                <p>No activities match your current filters.</p>
               </div>
-            );
-          })
-        )}
-      </div>
+            ) : (
+              filteredActivities.map((activity) => (
+                <div key={activity.id} className={`activity-item ${activity.status}`}>
+                  <div className="activity-icon">
+                    {getActivityIcon(activity.type)}
+                  </div>
+                  <div className="activity-content">
+                    <div className="activity-header">
+                      <span className="activity-description">{activity.description}</span>
+                      <span className="activity-time">{formatTime(activity.timestamp)}</span>
+                    </div>
+                    <div className="activity-details">
+                      <span className="activity-user">by {activity.user}</span>
+                      {activity.amount && (
+                        <span className="activity-amount">₹{activity.amount.toFixed(2)}</span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="activity-status">
+                    {getStatusIcon(activity.status)}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -1,20 +1,13 @@
 import { useState, useEffect } from 'react';
 import { 
   BarChart3, 
-  TrendingUp, 
-  TrendingDown, 
-  Calendar, 
   Download,
-  DollarSign,
   Package,
-  Users,
-  ShoppingCart,
-  Eye,
   Filter,
   FileText
 } from 'lucide-react';
 import { getSales } from '../services/firebaseService';
-import { printBill, downloadBill } from '../utils/billGenerator';
+import { printBill } from '../utils/billGenerator';
 
 const ReportsView = ({ inventory }) => {
   const [sales, setSales] = useState([]);

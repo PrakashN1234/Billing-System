@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { 
   AlertTriangle, 
   Package, 
@@ -17,11 +17,7 @@ const LowStockView = ({ inventory }) => {
   const [sortBy, setSortBy] = useState('stock');
   const [showBulkModal, setShowBulkModal] = useState(false);
 
-  useEffect(() => {
-    filterLowStockItems();
-  }, [inventory, searchTerm, stockThreshold, sortBy]);
-
-  const filterLowStockItems = () => {
+  const filterLowStockItems = useCallback(() => {
     let filtered = inventory.filter(item => item.stock <= stockThreshold);
     
     if (searchTerm) {
@@ -45,7 +41,11 @@ const LowStockView = ({ inventory }) => {
     });
 
     setLowStockItems(filtered);
-  };
+  }, [inventory, searchTerm, stockThreshold, sortBy]);
+
+  useEffect(() => {
+    filterLowStockItems();
+  }, [filterLowStockItems]);
 
   const getStockStatus = (stock) => {
     if (stock === 0) return { status: 'out-of-stock', label: 'Out of Stock', color: 'danger' };

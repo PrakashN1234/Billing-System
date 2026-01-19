@@ -8,12 +8,6 @@ const InventorySidebar = ({ inventory, addToCart }) => {
     p.name.toLowerCase().includes(search.toLowerCase())
   );
 
-  const getStockStatus = (stock) => {
-    if (stock === 0) return 'out-of-stock';
-    if (stock < 10) return 'low-stock';
-    return 'in-stock';
-  };
-
   const getStockIcon = (stock) => {
     if (stock === 0) return <AlertTriangle size={16} className="stock-icon out" />;
     if (stock < 10) return <AlertTriangle size={16} className="stock-icon low" />;

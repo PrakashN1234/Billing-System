@@ -10,7 +10,7 @@ import {
   BarChart3,
   AlertTriangle
 } from 'lucide-react';
-import { getSales, subscribeToStores, subscribeToUsers, initializeStores, initializeUsers } from '../services/firebaseService';
+import { getSales, subscribeToStores, subscribeToUsers } from '../services/firebaseService';
 import { useAuth } from '../contexts/AuthContext';
 
 const Dashboard = ({ inventory, setActiveView }) => {
@@ -58,22 +58,6 @@ const Dashboard = ({ inventory, setActiveView }) => {
     };
   }, []);
 
-  // Update stats whenever data changes
-  useEffect(() => {
-    updateStats();
-  }, [inventory, sales, stores, users]);
-
-  const loadDashboardData = async () => {
-    try {
-      const salesData = await getSales(50);
-      setSales(salesData);
-    } catch (error) {
-      console.error('Error loading dashboard data:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const updateStats = useCallback(() => {
     const totalSales = sales.reduce((sum, sale) => sum + sale.total, 0);
     
@@ -86,6 +70,22 @@ const Dashboard = ({ inventory, setActiveView }) => {
     
     setStats(newStats);
   }, [stores, inventory, sales]);
+
+  // Update stats whenever data changes
+  useEffect(() => {
+    updateStats();
+  }, [inventory, sales, stores, users, updateStats]);
+
+  const loadDashboardData = async () => {
+    try {
+      const salesData = await getSales(50);
+      setSales(salesData);
+    } catch (error) {
+      console.error('Error loading dashboard data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleLogout = async () => {
     try {

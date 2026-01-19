@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { 
   LayoutDashboard, 
   Store, 
@@ -13,7 +12,7 @@ import {
 import { useAuth } from '../contexts/AuthContext';
 
 const Sidebar = ({ activeView, setActiveView }) => {
-  const { logout, currentUser } = useAuth();
+  const { logout } = useAuth();
 
   const handleLogout = async () => {
     try {
