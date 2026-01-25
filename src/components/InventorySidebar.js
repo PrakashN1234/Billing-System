@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { Search, Plus, Package, AlertTriangle } from 'lucide-react';
 
-const InventorySidebar = ({ inventory, addToCart }) => {
+const InventorySidebar = ({ inventory, addToCart, readOnly = false }) => {
   const [search, setSearch] = useState("");
 
   const filtered = inventory.filter(p => 
-    p.name.toLowerCase().includes(search.toLowerCase())
+    p.name.toLowerCase().includes(search.toLowerCase()) ||
+    (p.code && p.code.toLowerCase().includes(search.toLowerCase()))
   );
 
   const getStockIcon = (stock) => {
@@ -14,8 +15,14 @@ const InventorySidebar = ({ inventory, addToCart }) => {
     return <Package size={16} className="stock-icon good" />;
   };
 
+  const getStockStatus = (stock) => {
+    if (stock === 0) return 'out-of-stock';
+    if (stock < 10) return 'low-stock';
+    return 'in-stock';
+  };
+
   return (
-    <aside className="inventory-sidebar">
+    <aside className={`inventory-sidebar ${readOnly ? 'read-only' : ''}`}>
       <div className="sidebar-header">
         <h3>Inventory ({inventory.length} items)</h3>
         <div className="stock-summary">
@@ -34,7 +41,7 @@ const InventorySidebar = ({ inventory, addToCart }) => {
         <Search className="search-icon" size={18} />
         <input 
           type="text" 
-          placeholder="Search products..." 
+          placeholder={readOnly ? "Search products or codes..." : "Search products..."} 
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
@@ -49,9 +56,10 @@ const InventorySidebar = ({ inventory, addToCart }) => {
         ) : (
           filtered.map(product => (
             <div 
-              className={`product-item ₹{getStockStatus(product.stock)}`} 
+              className={`product-item ${getStockStatus(product.stock)} ${readOnly ? 'read-only' : ''}`} 
               key={product.id} 
-              onClick={() => addToCart(product)}
+              onClick={readOnly ? undefined : () => addToCart(product)}
+              style={readOnly ? { cursor: 'default' } : {}}
             >
               <div className="product-info">
                 <div className="product-header">
@@ -59,16 +67,21 @@ const InventorySidebar = ({ inventory, addToCart }) => {
                   {getStockIcon(product.stock)}
                 </div>
                 <div className="product-details">
+                  {product.code && (
+                    <span className="product-code">Code: {product.code}</span>
+                  )}
                   <span className="price">₹{product.price.toFixed(2)}</span>
-                  <span className={`stock ₹{getStockStatus(product.stock)}`}>
+                  <span className={`stock ${getStockStatus(product.stock)}`}>
                     Stock: {product.stock}
                   </span>
                 </div>
               </div>
-              <Plus 
-                className={`plus-icon ₹{product.stock === 0 ? 'disabled' : ''}`} 
-                size={18} 
-              />
+              {!readOnly && (
+                <Plus 
+                  className={`plus-icon ${product.stock === 0 ? 'disabled' : ''}`} 
+                  size={18} 
+                />
+              )}
             </div>
           ))
         )}

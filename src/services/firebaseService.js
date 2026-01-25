@@ -3,13 +3,15 @@ import {
   doc, 
   getDocs, 
   addDoc, 
+  setDoc,
   updateDoc, 
   deleteDoc, 
   onSnapshot,
   serverTimestamp,
   query,
   orderBy,
-  limit
+  limit,
+  where
 } from 'firebase/firestore';
 import { db } from '../firebase';
 
@@ -31,12 +33,26 @@ export const getInventory = async () => {
 export const addProduct = async (product) => {
   try {
     const inventoryRef = collection(db, 'inventory');
-    const docRef = await addDoc(inventoryRef, {
-      ...product,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp()
-    });
-    return docRef.id;
+    
+    // Use custom product code as document ID if available
+    if (product.code) {
+      const docRef = doc(inventoryRef, product.code);
+      await setDoc(docRef, {
+        ...product,
+        id: product.code, // Ensure ID matches the document ID
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      });
+      return product.code;
+    } else {
+      // Fallback to auto-generated ID if no code provided
+      const docRef = await addDoc(inventoryRef, {
+        ...product,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      });
+      return docRef.id;
+    }
   } catch (error) {
     console.error('Error adding product:', error);
     throw error;
@@ -421,5 +437,242 @@ export const initializeUsers = async () => {
   } catch (error) {
     console.error('❌ Error initializing users:', error);
     // Don't throw error here, just log it
+  }
+};
+
+// Store-based data filtering functions
+
+/**
+ * Get inventory filtered by store access
+ * @param {string|null} storeId - Store ID to filter by, null for all stores
+ * @returns {Promise<Array>} - Filtered inventory array
+ */
+export const getInventoryByStore = async (storeId = null) => {
+  try {
+    const inventoryRef = collection(db, 'inventory');
+    let inventoryQuery;
+    
+    if (storeId) {
+      // Filter by specific store
+      inventoryQuery = query(inventoryRef, where('storeId', '==', storeId));
+    } else {
+      // Get all inventory (for super admin)
+      inventoryQuery = inventoryRef;
+    }
+    
+    const snapshot = await getDocs(inventoryQuery);
+    return snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
+  } catch (error) {
+    console.error('Error fetching inventory by store:', error);
+    throw error;
+  }
+};
+
+/**
+ * Get sales filtered by store access
+ * @param {string|null} storeId - Store ID to filter by, null for all stores
+ * @param {number} limitCount - Number of sales to fetch
+ * @returns {Promise<Array>} - Filtered sales array
+ */
+export const getSalesByStore = async (storeId = null, limitCount = 50) => {
+  try {
+    const salesRef = collection(db, 'sales');
+    let salesQuery;
+    
+    if (storeId) {
+      // Filter by specific store
+      salesQuery = query(
+        salesRef, 
+        where('storeId', '==', storeId),
+        orderBy('timestamp', 'desc'),
+        limit(limitCount)
+      );
+    } else {
+      // Get all sales (for super admin)
+      salesQuery = query(
+        salesRef,
+        orderBy('timestamp', 'desc'),
+        limit(limitCount)
+      );
+    }
+    
+    const snapshot = await getDocs(salesQuery);
+    return snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
+  } catch (error) {
+    console.error('Error fetching sales by store:', error);
+    throw error;
+  }
+};
+
+/**
+ * Subscribe to inventory changes filtered by store
+ * @param {string|null} storeId - Store ID to filter by, null for all stores
+ * @param {Function} onUpdate - Callback function for updates
+ * @param {Function} onError - Callback function for errors
+ * @returns {Function} - Unsubscribe function
+ */
+export const subscribeToInventoryByStore = (storeId = null, onUpdate, onError) => {
+  try {
+    const inventoryRef = collection(db, 'inventory');
+    let inventoryQuery;
+    
+    if (storeId) {
+      inventoryQuery = query(inventoryRef, where('storeId', '==', storeId));
+    } else {
+      inventoryQuery = inventoryRef;
+    }
+    
+    return onSnapshot(
+      inventoryQuery,
+      (snapshot) => {
+        const inventory = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+        onUpdate(inventory);
+      },
+      onError
+    );
+  } catch (error) {
+    console.error('Error subscribing to inventory by store:', error);
+    onError(error);
+  }
+};
+
+/**
+ * Add product with store association
+ * @param {Object} product - Product data
+ * @param {string} storeId - Store ID to associate with
+ * @returns {Promise<string>} - Document ID
+ */
+export const addProductToStore = async (product, storeId) => {
+  try {
+    const inventoryRef = collection(db, 'inventory');
+    const productData = {
+      ...product,
+      storeId: storeId,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    };
+    
+    // Use custom product code as document ID if available
+    if (product.code) {
+      const docRef = doc(inventoryRef, product.code);
+      await setDoc(docRef, {
+        ...productData,
+        id: product.code // Ensure ID matches the document ID
+      });
+      return product.code;
+    } else {
+      // Fallback to auto-generated ID if no code provided
+      const docRef = await addDoc(inventoryRef, productData);
+      return docRef.id;
+    }
+  } catch (error) {
+    console.error('Error adding product to store:', error);
+    throw error;
+  }
+};
+
+/**
+ * Save sale with store association
+ * @param {Object} saleData - Sale data
+ * @param {string} storeId - Store ID to associate with
+ * @returns {Promise<string>} - Document ID
+ */
+export const saveSaleToStore = async (saleData, storeId) => {
+  try {
+    const salesRef = collection(db, 'sales');
+    const docRef = await addDoc(salesRef, {
+      ...saleData,
+      storeId: storeId,
+      timestamp: serverTimestamp()
+    });
+    return docRef.id;
+  } catch (error) {
+    console.error('Error saving sale to store:', error);
+    throw error;
+  }
+};
+
+/**
+ * Get stores that user can access
+ * @param {boolean} isSuperAdmin - Whether user is super admin
+ * @param {string|null} userStoreId - User's store ID if not super admin
+ * @returns {Promise<Array>} - Array of accessible stores
+ */
+export const getAccessibleStores = async (isSuperAdmin, userStoreId = null) => {
+  try {
+    const storesRef = collection(db, 'stores');
+    let storesQuery;
+    
+    if (isSuperAdmin) {
+      // Super admin can see all stores
+      storesQuery = storesRef;
+    } else if (userStoreId) {
+      // Regular admin can only see their store
+      storesQuery = query(storesRef, where('id', '==', userStoreId));
+    } else {
+      // No access
+      return [];
+    }
+    
+    const snapshot = await getDocs(storesQuery);
+    return snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
+  } catch (error) {
+    console.error('Error fetching accessible stores:', error);
+    throw error;
+  }
+};
+
+/**
+ * Create a new store (Super Admin only)
+ * @param {Object} storeData - Store data
+ * @returns {Promise<string>} - Document ID
+ */
+export const createStore = async (storeData) => {
+  try {
+    const storesRef = collection(db, 'stores');
+    const docRef = await addDoc(storesRef, {
+      ...storeData,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+      status: 'active'
+    });
+    return docRef.id;
+  } catch (error) {
+    console.error('Error creating store:', error);
+    throw error;
+  }
+};
+
+/**
+ * Create a new user (Super Admin only)
+ * @param {Object} userData - User data including email, role, storeId
+ * @returns {Promise<string>} - Document ID
+ */
+export const createUser = async (userData) => {
+  try {
+    const usersRef = collection(db, 'users');
+    const docRef = await addDoc(usersRef, {
+      ...userData,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+      status: 'active',
+      lastLogin: null
+    });
+    return docRef.id;
+  } catch (error) {
+    console.error('Error creating user:', error);
+    throw error;
   }
 };

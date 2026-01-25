@@ -104,7 +104,7 @@ const Login = ({ onLogin }) => {
       <div className="login-card">
         <div className="login-header">
           <Store size={40} className="store-icon" />
-          <h1>My Store</h1>
+          <h1>Praba Store</h1>
           <p>Supermarket Billing System</p>
         </div>
 

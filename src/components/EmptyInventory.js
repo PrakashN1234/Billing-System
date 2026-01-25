@@ -2,13 +2,13 @@ import { useState } from 'react';
 import { Package, Plus, Download } from 'lucide-react';
 import { initializeInventory } from '../utils/initializeData';
 
-const EmptyInventory = () => {
+const EmptyInventory = ({ userEmail }) => {
   const [isLoading, setIsLoading] = useState(false);
 
   const handleInitialize = async () => {
     setIsLoading(true);
     try {
-      await initializeInventory();
+      await initializeInventory(userEmail);
       // The inventory will update automatically via the real-time listener
     } catch (error) {
       alert('Failed to initialize inventory. Please try again.');

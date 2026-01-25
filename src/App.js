@@ -2,7 +2,10 @@ import { useState, useEffect } from 'react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import Login from './components/Login';
 import Sidebar from './components/Sidebar';
-import Dashboard from './components/Dashboard';
+import SuperAdminDashboard from './components/SuperAdminDashboard';
+import AdminDashboard from './components/AdminDashboard';
+import CashierDashboard from './components/CashierDashboard';
+import UnauthorizedAccess from './components/UnauthorizedAccess';
 import StoresView from './components/StoresView';
 import UsersView from './components/UsersView';
 import ReportsView from './components/ReportsView';
@@ -11,11 +14,12 @@ import ActivityView from './components/ActivityView';
 import BillingTable from './components/BillingTable';
 import InventorySidebar from './components/InventorySidebar';
 import AdminPanel from './components/AdminPanel';
+import BarcodeManager from './components/BarcodeManager';
+import BarcodeTestPage from './components/BarcodeTestPage';
 import LoadingSpinner from './components/LoadingSpinner';
-import { subscribeToInventory } from './services/firebaseService';
-import { initializeInventory } from './utils/initializeData';
-import './utils/testConnection';
-import './utils/testFirebase'; // Add Firebase testing utility
+import { subscribeToInventoryByStore } from './services/firebaseService';
+import { initializeInventory, clearAllInventory, updateExistingProductCodes } from './utils/initializeData';
+import { isUserAuthorized, getUserRole, canAccessView, USER_ROLES, getUserStoreId, isSuperAdmin, hasPermission } from './utils/roleManager';
 import './App.css';
 
 const MainApp = () => {
@@ -31,35 +35,41 @@ const MainApp = () => {
     if (!currentUser) return;
     
     let unsubscribe;
+    const userStoreId = getUserStoreId(currentUser.email);
+    const isSuper = isSuperAdmin(currentUser.email);
     
     const setupInventory = async () => {
-      unsubscribe = subscribeToInventory(
-        (inventoryData) => {
-          if (inventoryData.length === 0 && !isInitializing) {
-            setIsInitializing(true);
-            initializeInventory()
-              .then(() => {
-                console.log('✅ Sample inventory initialized automatically');
-                setIsInitializing(false);
-              })
-              .catch((error) => {
-                console.error('❌ Failed to initialize inventory:', error);
-                setError('Failed to initialize inventory');
-                setIsInitializing(false);
-                setLoading(false);
-              });
-          } else {
-            setInventory(inventoryData);
+      try {
+        unsubscribe = subscribeToInventoryByStore(
+          isSuper ? null : userStoreId, // null for super admin = all stores
+          (inventoryData) => {
+            console.log(`📦 Inventory updated: ${inventoryData.length} products loaded`);
+            if (inventoryData.length > 0) {
+              console.log(`📊 Categories found:`, [...new Set(inventoryData.map(p => p.category))]);
+            }
+            
+            if (inventoryData.length === 0 && !isInitializing) {
+              // Only initialize if explicitly needed
+              setInventory([]);
+              setLoading(false);
+              setError(null);
+            } else {
+              setInventory(inventoryData);
+              setLoading(false);
+              setError(null);
+            }
+          },
+          (error) => {
+            console.error('Error loading inventory:', error);
+            setError('Failed to load inventory data');
             setLoading(false);
-            setError(null);
           }
-        },
-        (error) => {
-          console.error('Error loading inventory:', error);
-          setError('Failed to load inventory data');
-          setLoading(false);
-        }
-      );
+        );
+      } catch (error) {
+        console.error('Error setting up inventory listener:', error);
+        setError('Failed to connect to inventory system');
+        setLoading(false);
+      }
     };
 
     setupInventory();
@@ -110,11 +120,170 @@ const MainApp = () => {
     return <Login />;
   }
 
-  if (loading || isInitializing) {
+  // Check if user is authorized
+  if (!isUserAuthorized(currentUser.email)) {
+    return <UnauthorizedAccess />;
+  }
+
+  if (loading) {
     return (
       <LoadingSpinner 
-        message={isInitializing ? "Setting up inventory..." : "Loading My Store..."} 
+        message="Loading My Store..." 
       />
+    );
+  }
+
+  // Show inventory management options if products exist but need code updates
+  if (inventory.length > 0 && !loading) {
+    // Check if products have proper codes (not random Firebase IDs)
+    const hasRandomIds = inventory.some(item => 
+      item.id && item.id.length > 10 && /[a-z]/.test(item.id) && /[A-Z]/.test(item.id)
+    );
+    
+    if (hasRandomIds) {
+      return (
+        <div className="app-container">
+          <Sidebar 
+            activeView={activeView} 
+            setActiveView={setActiveView}
+            userEmail={currentUser.email}
+          />
+          <main className="main-content">
+            <div className="inventory-fix-state">
+              <div className="fix-content">
+                <h2>Product Code Update Required</h2>
+                <p>Your inventory has <strong>{inventory.length} products</strong> with random Firebase IDs. Update them to use smart product codes like <strong>RICE001</strong>, <strong>MILK001</strong>, etc.</p>
+                
+                <div className="inventory-actions">
+                  <button 
+                    className="btn-fix-codes"
+                    onClick={async () => {
+                      const confirmed = window.confirm(
+                        `This will update all ${inventory.length} products with smart product codes based on their names. Continue?`
+                      );
+                      if (!confirmed) return;
+                      
+                      setIsInitializing(true);
+                      try {
+                        const result = await updateExistingProductCodes();
+                        console.log('✅ Product codes updated:', result);
+                        
+                        const sampleCodesText = result.sampleCodes 
+                          ? result.sampleCodes.map(p => `${p.name}: ${p.oldId} → ${p.newCode}`).join('\n')
+                          : '';
+                        
+                        alert(`Successfully updated ${result.updated} products with smart codes!\n\nSample Updates:\n${sampleCodesText}`);
+                      } catch (error) {
+                        console.error('❌ Failed to update codes:', error);
+                        alert('Failed to update product codes. Please try again.');
+                      } finally {
+                        setIsInitializing(false);
+                      }
+                    }}
+                    disabled={isInitializing}
+                  >
+                    {isInitializing ? 'Updating Product Codes...' : 'Fix Product Codes'}
+                  </button>
+                  
+                  <button 
+                    className="btn-continue"
+                    onClick={() => {
+                      // Continue with current inventory
+                      console.log('Continuing with current inventory');
+                    }}
+                  >
+                    Continue with Current Codes
+                  </button>
+                </div>
+                
+                <p className="fix-note">Smart codes make products easier to search and manage</p>
+              </div>
+            </div>
+          </main>
+        </div>
+      );
+    }
+  }
+
+  // Show empty inventory state with option to initialize
+  if (inventory.length === 0 && !loading) {
+    return (
+      <div className="app-container">
+        <Sidebar 
+          activeView={activeView} 
+          setActiveView={setActiveView}
+          userEmail={currentUser.email}
+        />
+        <main className="main-content">
+          <div className="empty-inventory-state">
+            <div className="empty-content">
+              <h2>Welcome to My Store!</h2>
+              <p>Your inventory is empty. Add our comprehensive supermarket inventory with <strong>150+ real products</strong> across 15+ categories including fresh produce, dairy, meat, bakery, beverages, snacks, household items, and more!</p>
+              
+              <div className="inventory-actions">
+                <button 
+                  className="btn-add-sample"
+                  onClick={async () => {
+                    setIsInitializing(true);
+                    try {
+                      const result = await initializeInventory(false); // Don't clear, just add
+                      console.log('✅ Comprehensive inventory added:', result);
+                      
+                      // Show sample codes in alert
+                      const sampleCodesText = result.sampleCodes 
+                        ? result.sampleCodes.map(p => `${p.name} → ${p.code}`).join('\n')
+                        : '';
+                      
+                      alert(`Successfully added ${result.count || '150+'} products to your inventory!\n\nSample Product Codes:\n${sampleCodesText}`);
+                    } catch (error) {
+                      console.error('❌ Failed to add inventory:', error);
+                      alert('Failed to add inventory. Please try again.');
+                    } finally {
+                      setIsInitializing(false);
+                    }
+                  }}
+                  disabled={isInitializing}
+                >
+                  {isInitializing ? 'Adding 150+ Products...' : 'Add Complete Supermarket Inventory'}
+                </button>
+                
+                <button 
+                  className="btn-replace-sample"
+                  onClick={async () => {
+                    const confirmed = window.confirm(
+                      'This will clear all existing inventory and add 150+ new products with smart product codes. Are you sure?'
+                    );
+                    if (!confirmed) return;
+                    
+                    setIsInitializing(true);
+                    try {
+                      const result = await initializeInventory(true); // Clear first, then add
+                      console.log('✅ Inventory replaced:', result);
+                      
+                      // Show sample codes in alert
+                      const sampleCodesText = result.sampleCodes 
+                        ? result.sampleCodes.map(p => `${p.name} → ${p.code}`).join('\n')
+                        : '';
+                      
+                      alert(`Successfully replaced inventory with ${result.count || '150+'} new products!\n\nSample Product Codes:\n${sampleCodesText}`);
+                    } catch (error) {
+                      console.error('❌ Failed to replace inventory:', error);
+                      alert('Failed to replace inventory. Please try again.');
+                    } finally {
+                      setIsInitializing(false);
+                    }
+                  }}
+                  disabled={isInitializing}
+                >
+                  {isInitializing ? 'Replacing Inventory...' : 'Replace Current Inventory'}
+                </button>
+              </div>
+              
+              <p className="empty-note">This will add products from all major supermarket categories</p>
+            </div>
+          </div>
+        </main>
+      </div>
     );
   }
 
@@ -134,15 +303,46 @@ const MainApp = () => {
   }
 
   const renderActiveView = () => {
+    const userRole = getUserRole(currentUser.email);
+    
+    // Check if user can access the current view
+    if (!canAccessView(currentUser.email, activeView)) {
+      setActiveView('dashboard'); // Redirect to dashboard if no access
+      return renderDashboard(userRole);
+    }
+
     switch (activeView) {
       case 'dashboard':
-        return <Dashboard inventory={inventory} setActiveView={setActiveView} />;
+        return renderDashboard(userRole);
       case 'stores':
         return <StoresView />;
       case 'users':
         return <UsersView />;
       case 'inventory':
-        return <AdminPanel inventory={inventory} onClose={() => setActiveView('dashboard')} />;
+        // Show different inventory views based on user role
+        if (hasPermission(currentUser.email, 'manage_inventory')) {
+          // Admins and Super Admins can manage inventory
+          return <AdminPanel inventory={inventory} onClose={() => setActiveView('dashboard')} />;
+        } else {
+          // Cashiers get a read-only inventory view
+          return (
+            <div className="inventory-view">
+              <div className="inventory-header">
+                <h2>Inventory ({inventory.length} items)</h2>
+                <p>View-only access - Contact admin to make changes</p>
+              </div>
+              <InventorySidebar 
+                inventory={inventory} 
+                addToCart={addToCart}
+                readOnly={true}
+              />
+            </div>
+          );
+        }
+      case 'barcode':
+        return <BarcodeManager inventory={inventory} onClose={() => setActiveView('dashboard')} />;
+      case 'barcode-test':
+        return <BarcodeTestPage />;
       case 'billing':
         return (
           <div className="billing-layout">
@@ -167,13 +367,30 @@ const MainApp = () => {
       case 'activity':
         return <ActivityView inventory={inventory} />;
       default:
-        return <Dashboard inventory={inventory} currentUser={currentUser} />;
+        return renderDashboard(userRole);
+    }
+  };
+
+  const renderDashboard = (userRole) => {
+    switch (userRole) {
+      case USER_ROLES.SUPER_ADMIN:
+        return <SuperAdminDashboard setActiveView={setActiveView} />;
+      case USER_ROLES.ADMIN:
+        return <AdminDashboard inventory={inventory} setActiveView={setActiveView} />;
+      case USER_ROLES.CASHIER:
+        return <CashierDashboard inventory={inventory} setActiveView={setActiveView} />;
+      default:
+        return <UnauthorizedAccess />;
     }
   };
 
   return (
     <div className="app-container">
-      <Sidebar activeView={activeView} setActiveView={setActiveView} />
+      <Sidebar 
+        activeView={activeView} 
+        setActiveView={setActiveView}
+        userEmail={currentUser.email}
+      />
       <main className="main-content">
         {renderActiveView()}
       </main>

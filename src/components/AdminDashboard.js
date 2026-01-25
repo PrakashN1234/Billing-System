@@ -1,82 +1,84 @@
 import { useState, useEffect, useCallback } from 'react';
 import { 
-  Store, 
   Package, 
   TrendingUp, 
   Receipt,
   Plus,
-  Users,
-  CreditCard,
   BarChart3,
-  AlertTriangle
+  AlertTriangle,
+  UserCheck,
+  Activity,
+  QrCode
 } from 'lucide-react';
-import { getSales, subscribeToStores, subscribeToUsers } from '../services/firebaseService';
+import { getSalesByStore, getAccessibleStores } from '../services/firebaseService';
 import { useAuth } from '../contexts/AuthContext';
 import { generateBarcodesForInventory } from '../utils/generateInventoryBarcodes';
-import { runAllBarcodeTests } from '../utils/testBarcodeSystem';
 import { generateCodesForInventory } from '../utils/generateProductCodes';
+import { getRoleDisplayName, getUserRole, getUserInfo, getUserStoreId } from '../utils/roleManager';
 
-const Dashboard = ({ inventory, setActiveView }) => {
+const AdminDashboard = ({ inventory, setActiveView }) => {
   const { currentUser, logout } = useAuth();
   const [sales, setSales] = useState([]);
-  const [stores, setStores] = useState([]);
-  const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({
-    totalStores: 0,
     totalProducts: 0,
     totalSales: 0,
     totalBills: 0,
+    lowStockItems: 0,
     productsWithBarcodes: 0,
     productsWithoutBarcodes: 0,
     productsWithCodes: 0,
     productsWithoutCodes: 0
   });
 
+  const userInfo = getUserInfo(currentUser?.email);
+  const userStoreId = getUserStoreId(currentUser?.email);
+
+  const loadDashboardData = useCallback(async () => {
+    try {
+      // Admin can only see their store's sales
+      const salesData = await getSalesByStore(userStoreId, 50);
+      setSales(salesData);
+    } catch (error) {
+      console.error('Error loading dashboard data:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, [userStoreId]);
+
+  const loadStoreData = useCallback(async () => {
+    try {
+      // Admin can only see their own store
+      const storesData = await getAccessibleStores(false, userStoreId);
+      console.log('Store data loaded:', storesData); // For debugging
+    } catch (error) {
+      console.error('Error loading store data:', error);
+    }
+  }, [userStoreId]);
+
   useEffect(() => {
     loadDashboardData();
-    
-    // Subscribe to real-time stores updates
-    const unsubscribeStores = subscribeToStores(
-      (storesData) => {
-        setStores(storesData);
-        setLoading(false);
-      },
-      (error) => {
-        console.error('Error loading stores for dashboard:', error);
-        setLoading(false);
-      }
-    );
-
-    // Subscribe to real-time users updates
-    const unsubscribeUsers = subscribeToUsers(
-      (usersData) => {
-        setUsers(usersData);
-      },
-      (error) => {
-        console.error('Error loading users for dashboard:', error);
-      }
-    );
-
-    // Cleanup subscriptions
-    return () => {
-      if (unsubscribeStores) unsubscribeStores();
-      if (unsubscribeUsers) unsubscribeUsers();
-    };
-  }, []);
+    loadStoreData();
+  }, [loadDashboardData, loadStoreData]);
 
   const updateStats = useCallback(() => {
+    // Filter inventory to only show products from user's store
+    const storeInventory = inventory.filter(item => 
+      !userStoreId || item.storeId === userStoreId
+    );
+    
     const totalSales = sales.reduce((sum, sale) => sum + sale.total, 0);
-    const productsWithBarcodes = inventory.filter(item => item.barcode).length;
-    const productsWithoutBarcodes = inventory.length - productsWithBarcodes;
-    const productsWithCodes = inventory.filter(item => item.code).length;
-    const productsWithoutCodes = inventory.length - productsWithCodes;
+    const productsWithBarcodes = storeInventory.filter(item => item.barcode).length;
+    const productsWithoutBarcodes = storeInventory.length - productsWithBarcodes;
+    const productsWithCodes = storeInventory.filter(item => item.code).length;
+    const productsWithoutCodes = storeInventory.length - productsWithCodes;
+    const lowStockItems = storeInventory.filter(item => item.stock < 10).length;
     
     const newStats = {
-      totalStores: stores.length,
-      totalProducts: inventory.length,
+      totalProducts: storeInventory.length,
       totalSales: totalSales,
       totalBills: sales.length,
+      lowStockItems,
       productsWithBarcodes,
       productsWithoutBarcodes,
       productsWithCodes,
@@ -84,23 +86,11 @@ const Dashboard = ({ inventory, setActiveView }) => {
     };
     
     setStats(newStats);
-  }, [stores, inventory, sales]);
+  }, [inventory, sales, userStoreId]);
 
-  // Update stats whenever data changes
   useEffect(() => {
     updateStats();
-  }, [inventory, sales, stores, users, updateStats]);
-
-  const loadDashboardData = async () => {
-    try {
-      const salesData = await getSales(50);
-      setSales(salesData);
-    } catch (error) {
-      console.error('Error loading dashboard data:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  }, [inventory, sales, updateStats]);
 
   const handleLogout = async () => {
     try {
@@ -112,35 +102,26 @@ const Dashboard = ({ inventory, setActiveView }) => {
 
   const handleQuickAction = async (actionId) => {
     switch (actionId) {
-      case 'store':
-        setActiveView('stores');
-        break;
-      case 'user':
-        setActiveView('users');
-        break;
       case 'product':
         setActiveView('inventory');
-        break;
-      case 'bill':
-        setActiveView('billing');
-        break;
-      case 'reports':
-        setActiveView('reports');
         break;
       case 'barcode':
         setActiveView('barcode');
         break;
-      case 'generate-barcodes':
-        await handleGenerateAllBarcodes();
+      case 'reports':
+        setActiveView('reports');
+        break;
+      case 'activity':
+        setActiveView('activity');
+        break;
+      case 'lowstock':
+        setActiveView('lowstock');
         break;
       case 'generate-codes':
         await handleGenerateAllCodes();
         break;
-      case 'test-barcodes':
-        handleTestBarcodeSystem();
-        break;
-      case 'barcode-test-page':
-        setActiveView('barcode-test');
+      case 'generate-barcodes':
+        await handleGenerateAllBarcodes();
         break;
       default:
         console.log('Unknown action:', actionId);
@@ -187,7 +168,7 @@ const Dashboard = ({ inventory, setActiveView }) => {
     }
 
     const confirmed = window.confirm(
-      `Generate product codes for ${itemsWithoutCodes.length} products without codes?\n\nExample: "Basmati Rice 1kg" → "BASMAT001"`
+      `Generate product codes for ${itemsWithoutCodes.length} products without codes?`
     );
     
     if (!confirmed) return;
@@ -197,7 +178,7 @@ const Dashboard = ({ inventory, setActiveView }) => {
       const result = await generateCodesForInventory(inventory);
       
       if (result.success) {
-        alert(`Success! Generated product codes for ${result.updated} products.\n\nYou can now search products by their codes in the billing system.`);
+        alert(`Success! Generated product codes for ${result.updated} products.`);
       } else {
         alert(`Error: ${result.message}`);
       }
@@ -209,29 +190,17 @@ const Dashboard = ({ inventory, setActiveView }) => {
     }
   };
 
-  const handleTestBarcodeSystem = () => {
-    console.log('🧪 Running barcode system tests...');
-    const results = runAllBarcodeTests(inventory);
-    
-    if (results.success) {
-      alert(`Barcode system test completed!\n\nGeneration: ${results.generation.summary.valid}/${results.generation.summary.total} valid barcodes\nScanning: ${results.scanning.successRate?.toFixed(1)}% success rate\n\nCheck console for detailed results.`);
-    } else {
-      alert(`Barcode system test failed: ${results.error}`);
-    }
-  };
-      
   const quickActions = [
-    { id: 'store', label: 'Add Store', icon: Store, color: 'blue' },
-    { id: 'user', label: 'Add User', icon: Users, color: 'purple' },
     { id: 'product', label: 'Add Product', icon: Plus, color: 'green' },
-    { id: 'bill', label: 'New Bill', icon: CreditCard, color: 'orange' },
-    { id: 'barcode', label: 'Manage Barcodes', icon: BarChart3, color: 'teal' },
-    { id: 'reports', label: 'View Reports', icon: BarChart3, color: 'indigo' }
+    { id: 'reports', label: 'Sales Reports', icon: BarChart3, color: 'indigo' },
+    { id: 'barcode', label: 'Manage Barcodes', icon: QrCode, color: 'teal' },
+    { id: 'activity', label: 'View Activity', icon: Activity, color: 'purple' },
+    { id: 'lowstock', label: 'Low Stock', icon: AlertTriangle, color: 'orange' }
   ];
 
   const lowStockItems = inventory.filter(item => item.stock < 10);
+  const userRole = getUserRole(currentUser?.email);
 
-  // Get user display name and email
   const getUserDisplayName = () => {
     if (currentUser?.email) {
       return currentUser.email.split('@')[0];
@@ -239,36 +208,36 @@ const Dashboard = ({ inventory, setActiveView }) => {
     return 'admin';
   };
 
-  const getUserEmail = () => {
-    return currentUser?.email || 'prakashn1234@gmail.com';
-  };
-
   if (loading) {
     return (
       <div className="dashboard">
         <div className="loading-state">
           <Package size={48} />
-          <p>Loading dashboard...</p>
+          <p>Loading Admin dashboard...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="dashboard">
+    <div className="dashboard admin-dashboard">
       <div className="dashboard-header">
         <div className="welcome-section">
-          <h1>Dashboard</h1>
+          <div className="role-badge admin">
+            <UserCheck size={16} />
+            <span>{getRoleDisplayName(userRole)}</span>
+          </div>
+          <h1>Admin Dashboard</h1>
           <div className="welcome-banner">
-            <span>Welcome back, {getUserDisplayName()}!</span>
+            <span>Welcome back, {getUserDisplayName()}! Managing {userInfo?.storeName || 'your store'} efficiently.</span>
           </div>
         </div>
         <div className="user-profile">
-          <div className="avatar">{getUserDisplayName().charAt(0).toUpperCase()}</div>
+          <div className="avatar admin">{getUserDisplayName().charAt(0).toUpperCase()}</div>
           <div className="user-info">
             <span className="user-name">{getUserDisplayName()}</span>
-            <span className="user-role">Admin</span>
-            <span className="user-email">{getUserEmail()}</span>
+            <span className="user-role">Administrator</span>
+            <span className="user-email">{currentUser?.email}</span>
           </div>
           <button className="logout-btn" onClick={handleLogout}>
             Logout
@@ -277,16 +246,6 @@ const Dashboard = ({ inventory, setActiveView }) => {
       </div>
 
       <div className="stats-grid">
-        <div className="stat-card stores">
-          <div className="stat-icon">
-            <Store size={24} />
-          </div>
-          <div className="stat-content">
-            <div className="stat-label">TOTAL STORES</div>
-            <div className="stat-value">{stats.totalStores}</div>
-          </div>
-        </div>
-
         <div className="stat-card products">
           <div className="stat-icon">
             <Package size={24} />
@@ -317,13 +276,13 @@ const Dashboard = ({ inventory, setActiveView }) => {
           </div>
         </div>
 
-        <div className="stat-card barcodes">
+        <div className="stat-card warning">
           <div className="stat-icon">
-            <BarChart3 size={24} />
+            <AlertTriangle size={24} />
           </div>
           <div className="stat-content">
-            <div className="stat-label">WITH BARCODES</div>
-            <div className="stat-value">{stats.productsWithBarcodes}/{stats.totalProducts}</div>
+            <div className="stat-label">LOW STOCK ITEMS</div>
+            <div className="stat-value">{stats.lowStockItems}</div>
           </div>
         </div>
 
@@ -363,7 +322,7 @@ const Dashboard = ({ inventory, setActiveView }) => {
           <div className="low-stock-alert">
             <div className="alert-header">
               <AlertTriangle size={20} />
-              <span>Low Stock</span>
+              <span>Low Stock Alert</span>
             </div>
             <div className="low-stock-items">
               {lowStockItems.slice(0, 5).map((item) => (
@@ -390,12 +349,12 @@ const Dashboard = ({ inventory, setActiveView }) => {
             </div>
             <div className="barcode-info">
               {stats.productsWithoutCodes > 0 && (
-                <p>{stats.productsWithoutCodes} products don't have product codes yet</p>
+                <p>{stats.productsWithoutCodes} products need product codes</p>
               )}
               {stats.productsWithoutBarcodes > 0 && (
-                <p>{stats.productsWithoutBarcodes} products don't have barcodes yet</p>
+                <p>{stats.productsWithoutBarcodes} products need barcodes</p>
               )}
-              <p>Generate codes and barcodes to enable easy product search and scanning</p>
+              <p>Generate codes and barcodes for better inventory management</p>
             </div>
             <div className="barcode-actions">
               {stats.productsWithoutCodes > 0 && (
@@ -418,19 +377,7 @@ const Dashboard = ({ inventory, setActiveView }) => {
                 className="manage-btn"
                 onClick={() => setActiveView('barcode')}
               >
-                Manage System
-              </button>
-              <button 
-                className="test-btn"
-                onClick={() => handleQuickAction('test-barcodes')}
-              >
-                Test System
-              </button>
-              <button 
-                className="test-btn"
-                onClick={() => handleQuickAction('barcode-test-page')}
-              >
-                Test Scanning
+                Manage Barcodes
               </button>
             </div>
           </div>
@@ -440,4 +387,4 @@ const Dashboard = ({ inventory, setActiveView }) => {
   );
 };
 
-export default Dashboard;
+export default AdminDashboard;

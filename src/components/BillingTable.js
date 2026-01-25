@@ -24,7 +24,10 @@ const BillingTable = ({ cart, inventory, updateQty, removeItem, clearCart, addTo
       return;
     }
 
+    // Search by barcode first, then by product code, then by ID, then by name
     const product = inventory.find(p => 
+      p.barcode === productCode.trim() ||
+      p.code === productCode.trim().toUpperCase() ||
       p.id.toLowerCase() === productCode.toLowerCase() || 
       p.name.toLowerCase().includes(productCode.toLowerCase())
     );
@@ -37,7 +40,7 @@ const BillingTable = ({ cart, inventory, updateQty, removeItem, clearCart, addTo
         alert('Product is out of stock!');
       }
     } else {
-      alert('Product not found!');
+      alert('Product not found! Please check the barcode or product code.');
     }
   };
 
@@ -149,7 +152,7 @@ const BillingTable = ({ cart, inventory, updateQty, removeItem, clearCart, addTo
           
           <div className="scanner-info">
             <AlertCircle size={16} />
-            <p>For demonstration purposes, we use system-defined product codes scanned via laptop camera. This can be easily extended to real barcode scanners in production.</p>
+            <p>Camera scanner shows video feed but may have detection issues. Use manual entry below for reliable barcode input, or try scanning with better lighting and positioning.</p>
           </div>
 
           <div className="camera-section">
@@ -171,23 +174,31 @@ const BillingTable = ({ cart, inventory, updateQty, removeItem, clearCart, addTo
           </div>
 
           <div className="manual-entry">
-            <h3>Product Code (Manual Entry)</h3>
+            <h3>🔍 Barcode / Product Search</h3>
+            <p>Enter barcode number, product code, product ID, or product name:</p>
             <input
               type="text"
-              placeholder="E.G., RICE100, SUG123"
+              placeholder="Enter: 78011234567 (barcode) or RICE001 (code) or Rice (name)"
               value={productCode}
               onChange={(e) => setProductCode(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleFetchProduct()}
               disabled={isProcessing}
               className="product-code-input"
+              style={{ fontSize: '16px', padding: '12px' }}
             />
             <button 
               className="fetch-btn"
               onClick={handleFetchProduct}
               disabled={isProcessing}
+              style={{ padding: '12px 20px', fontSize: '16px' }}
             >
-              Fetch Product
+              🔍 Find & Add Product
             </button>
+            <div className="search-help">
+              <small>
+                💡 <strong>Tip:</strong> You can search by barcode (78011234567), product code (RICE001), product ID, or product name (Rice)
+              </small>
+            </div>
           </div>
 
           <div className="product-list-section">

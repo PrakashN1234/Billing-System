@@ -1,9 +1,23 @@
 {
   "$schema": "https://json.schemastore.org/package.json",
-  "name": "praba-store",
-  "version": "0.1.0",
+  "name": "supermarket-management-system",
+  "version": "1.0.0",
   "private": true,
-  "homepage": "./",
+  "homepage": "https://prakashn1234.github.io/Supermarket",
+  "description": "A comprehensive React-based supermarket management system with role-based access control, inventory management, billing, and barcode generation.",
+  "keywords": ["supermarket", "pos", "inventory", "billing", "barcode", "react", "firebase"],
+  "author": {
+    "name": "Prakash N",
+    "email": "nprakash315349@gmail.com",
+    "url": "https://github.com/PrakashN1234"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/PrakashN1234/Supermarket.git"
+  },
+  "bugs": {
+    "url": "https://github.com/PrakashN1234/Supermarket/issues"
+  },
   "engines": {
     "node": ">=18.0.0",
     "npm": ">=8.0.0"
@@ -13,7 +27,10 @@
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.1",
     "@testing-library/user-event": "^13.5.0",
+    "@zxing/browser": "^0.1.5",
+    "@zxing/library": "^0.21.3",
     "firebase": "^12.7.0",
+    "jsbarcode": "^3.12.3",
     "lucide-react": "^0.562.0",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
@@ -27,7 +44,8 @@
     "test": "react-scripts test",
     "eject": "react-scripts eject",
     "predeploy": "npm run build",
-    "deploy": "gh-pages -d build"
+    "deploy": "gh-pages -d build",
+    "build:analyze": "npm run build && npx bundle-analyzer build/static/js/*.js"
   },
   "eslintConfig": {
     "extends": [

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Plus, Edit2, Trash2, Save, X } from 'lucide-react';
+import { Plus, Edit2, Trash2, Save, X, RefreshCw } from 'lucide-react';
 import { addProduct, updateProduct, deleteProduct, getSales } from '../services/firebaseService';
+import { generateUniqueProductCode, suggestProductCodes } from '../utils/productCodeGenerator';
 
 const AdminPanel = ({ inventory, onClose }) => {
   const [activeTab, setActiveTab] = useState('inventory');
@@ -8,8 +9,10 @@ const AdminPanel = ({ inventory, onClose }) => {
   const [newProduct, setNewProduct] = useState({
     name: '',
     price: '',
-    stock: ''
+    stock: '',
+    code: ''
   });
+  const [suggestedCodes, setSuggestedCodes] = useState([]);
   const [sales, setSales] = useState([]);
   const [loading, setLoading] = useState(false);
 
@@ -39,15 +42,44 @@ const AdminPanel = ({ inventory, onClose }) => {
     }
 
     try {
+      // Generate product code if not provided
+      const productCode = newProduct.code || generateUniqueProductCode(newProduct.name, inventory);
+      
       await addProduct({
         name: newProduct.name,
         price: parseFloat(newProduct.price),
-        stock: parseInt(newProduct.stock)
+        stock: parseInt(newProduct.stock),
+        code: productCode
       });
-      setNewProduct({ name: '', price: '', stock: '' });
-      alert('Product added successfully!');
+      
+      setNewProduct({ name: '', price: '', stock: '', code: '' });
+      setSuggestedCodes([]);
+      alert(`Product added successfully with code: ${productCode}`);
     } catch (error) {
       alert('Error adding product');
+    }
+  };
+
+  const handleProductNameChange = (name) => {
+    setNewProduct({...newProduct, name});
+    
+    if (name.trim().length > 2) {
+      const suggestions = suggestProductCodes(name, 3);
+      setSuggestedCodes(suggestions);
+      
+      // Auto-set the first suggestion as default
+      if (!newProduct.code) {
+        setNewProduct(prev => ({...prev, name, code: suggestions[0]}));
+      }
+    } else {
+      setSuggestedCodes([]);
+    }
+  };
+
+  const generateNewCode = () => {
+    if (newProduct.name.trim()) {
+      const newCode = generateUniqueProductCode(newProduct.name, inventory);
+      setNewProduct({...newProduct, code: newCode});
     }
   };
 
@@ -107,25 +139,64 @@ const AdminPanel = ({ inventory, onClose }) => {
             <div className="add-product-form">
               <h3>Add New Product</h3>
               <form onSubmit={handleAddProduct}>
-                <input
-                  type="text"
-                  placeholder="Product name"
-                  value={newProduct.name}
-                  onChange={(e) => setNewProduct({...newProduct, name: e.target.value})}
-                />
-                <input
-                  type="number"
-                  step="0.01"
-                  placeholder="Price"
-                  value={newProduct.price}
-                  onChange={(e) => setNewProduct({...newProduct, price: e.target.value})}
-                />
-                <input
-                  type="number"
-                  placeholder="Stock quantity"
-                  value={newProduct.stock}
-                  onChange={(e) => setNewProduct({...newProduct, stock: e.target.value})}
-                />
+                <div className="form-row">
+                  <input
+                    type="text"
+                    placeholder="Product name (e.g., Basmati Rice 1kg)"
+                    value={newProduct.name}
+                    onChange={(e) => handleProductNameChange(e.target.value)}
+                  />
+                  <input
+                    type="number"
+                    step="0.01"
+                    placeholder="Price"
+                    value={newProduct.price}
+                    onChange={(e) => setNewProduct({...newProduct, price: e.target.value})}
+                  />
+                  <input
+                    type="number"
+                    placeholder="Stock quantity"
+                    value={newProduct.stock}
+                    onChange={(e) => setNewProduct({...newProduct, stock: e.target.value})}
+                  />
+                </div>
+                
+                <div className="product-code-section">
+                  <div className="code-input-group">
+                    <input
+                      type="text"
+                      placeholder="Product code (auto-generated)"
+                      value={newProduct.code}
+                      onChange={(e) => setNewProduct({...newProduct, code: e.target.value.toUpperCase()})}
+                      className="code-input"
+                    />
+                    <button 
+                      type="button" 
+                      className="btn-generate-code"
+                      onClick={generateNewCode}
+                      title="Generate new code"
+                    >
+                      <RefreshCw size={16} />
+                    </button>
+                  </div>
+                  
+                  {suggestedCodes.length > 0 && (
+                    <div className="code-suggestions">
+                      <span className="suggestions-label">Suggestions:</span>
+                      {suggestedCodes.map((code, index) => (
+                        <button
+                          key={index}
+                          type="button"
+                          className={`suggestion-btn ${newProduct.code === code ? 'active' : ''}`}
+                          onClick={() => setNewProduct({...newProduct, code})}
+                        >
+                          {code}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
                 <button type="submit" className="btn-add">
                   <Plus size={16} /> Add Product
                 </button>
@@ -137,6 +208,7 @@ const AdminPanel = ({ inventory, onClose }) => {
               <table>
                 <thead>
                   <tr>
+                    <th>Product Code</th>
                     <th>Name</th>
                     <th>Price</th>
                     <th>Stock</th>
@@ -147,6 +219,11 @@ const AdminPanel = ({ inventory, onClose }) => {
                 <tbody>
                   {inventory.map(product => (
                     <tr key={product.id}>
+                      <td>
+                        <span className="product-code">
+                          {product.code || product.id || 'N/A'}
+                        </span>
+                      </td>
                       <td>
                         {editingProduct === product.id ? (
                           <input

@@ -7,11 +7,13 @@ import {
   BarChart3, 
   AlertTriangle, 
   Activity,
-  LogOut 
+  LogOut,
+  QrCode
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { getNavigationItems, getUserRole, getRoleDisplayName } from '../utils/roleManager';
 
-const Sidebar = ({ activeView, setActiveView }) => {
+const Sidebar = ({ activeView, setActiveView, userEmail }) => {
   const { logout } = useAuth();
 
   const handleLogout = async () => {
@@ -22,16 +24,30 @@ const Sidebar = ({ activeView, setActiveView }) => {
     }
   };
 
-  const menuItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { id: 'stores', label: 'Stores', icon: Store },
-    { id: 'users', label: 'Users', icon: Users },
-    { id: 'inventory', label: 'Inventory', icon: Package },
-    { id: 'billing', label: 'Billing', icon: Receipt },
-    { id: 'reports', label: 'Reports', icon: BarChart3 },
-    { id: 'lowstock', label: 'Low Stock', icon: AlertTriangle },
-    { id: 'activity', label: 'Activity Log', icon: Activity },
-  ];
+  // Get navigation items based on user role
+  const navigationItems = getNavigationItems(userEmail);
+  const userRole = getUserRole(userEmail);
+  const roleDisplayName = getRoleDisplayName(userRole);
+
+  // Icon mapping
+  const iconMap = {
+    'Home': LayoutDashboard,
+    'CreditCard': Receipt,
+    'Package': Package,
+    'Store': Store,
+    'Users': Users,
+    'BarChart3': BarChart3,
+    'QrCode': QrCode,
+    'Activity': Activity,
+    'AlertTriangle': AlertTriangle
+  };
+
+  const getUserDisplayName = () => {
+    if (userEmail) {
+      return userEmail.split('@')[0];
+    }
+    return 'user';
+  };
 
   return (
     <div className="sidebar">
@@ -40,16 +56,21 @@ const Sidebar = ({ activeView, setActiveView }) => {
           <Store size={24} />
           <span>My Store</span>
         </div>
+        <div className="user-role-badge">
+          <span className={`role-indicator ${userRole}`}>{roleDisplayName}</span>
+          <span className="user-name">{getUserDisplayName()}</span>
+        </div>
       </div>
 
       <nav className="sidebar-nav">
-        {menuItems.map((item) => {
-          const Icon = item.icon;
+        {navigationItems.map((item) => {
+          const Icon = iconMap[item.icon] || Package;
           return (
             <button
               key={item.id}
               className={`nav-item ${activeView === item.id ? 'active' : ''}`}
               onClick={() => setActiveView(item.id)}
+              title={item.label}
             >
               <Icon size={20} />
               <span>{item.label}</span>

@@ -17,42 +17,38 @@ export const AuthProvider = ({ children }) => {
     return signOut(auth);
   };
 
-  // Store or update user details in Firestore
+  // Store or update user details in Firestore (optimized)
   const storeUserDetails = async (user) => {
     if (!user) return;
 
     try {
       const userRef = doc(db, 'users', user.uid);
-      const userDoc = await getDoc(userRef);
-
+      
+      // Only update essential fields to reduce write operations
       const userData = {
         uid: user.uid,
         email: user.email,
-        displayName: user.displayName || user.email.split('@')[0],
-        photoURL: user.photoURL || null,
-        lastLogin: serverTimestamp(),
-        updatedAt: serverTimestamp()
+        lastLogin: serverTimestamp()
       };
 
+      // Check if user exists first to avoid unnecessary reads
+      const userDoc = await getDoc(userRef);
+      
       if (!userDoc.exists()) {
-        // New user - create full profile
+        // New user - create minimal profile
         await setDoc(userRef, {
           ...userData,
-          name: user.displayName || user.email.split('@')[0],
-          phone: user.phoneNumber || '',
-          role: 'User',
-          status: 'Active',
-          joinDate: new Date().toISOString().split('T')[0],
+          displayName: user.displayName || user.email.split('@')[0],
           createdAt: serverTimestamp()
         });
         console.log('✅ New user profile created:', user.email);
       } else {
-        // Existing user - update last login
+        // Existing user - just update last login
         await setDoc(userRef, userData, { merge: true });
-        console.log('✅ User login updated:', user.email);
       }
     } catch (error) {
       console.error('❌ Error storing user details:', error);
+      // Don't throw error to prevent blocking login
     }
   };
 
