@@ -18,7 +18,7 @@ import BarcodeManager from './components/BarcodeManager';
 import BarcodeTestPage from './components/BarcodeTestPage';
 import LoadingSpinner from './components/LoadingSpinner';
 import { subscribeToInventoryByStore } from './services/firebaseService';
-import { initializeInventory, clearAllInventory, updateExistingProductCodes } from './utils/initializeData';
+import { initializeInventory, updateExistingProductCodes } from './utils/initializeData';
 import { isUserAuthorized, getUserRole, canAccessView, USER_ROLES, getUserStoreId, isSuperAdmin, hasPermission } from './utils/roleManager';
 import './App.css';
 
