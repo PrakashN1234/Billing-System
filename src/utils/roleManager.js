@@ -20,6 +20,7 @@ export const ROLE_PERMISSIONS = {
   [USER_ROLES.ADMIN]: [
     'view_dashboard',
     'manage_inventory',
+    'view_inventory',
     'view_reports',
     'manage_barcodes',
     'view_activity',
