@@ -3,7 +3,7 @@
   "name": "supermarket-management-system",
   "version": "1.0.0",
   "private": true,
-  "homepage": "https://prakashn1234.github.io/Supermarket",
+  "homepage": "https://prakashn1234.github.io/Billing-System",
   "description": "A comprehensive React-based supermarket management system with role-based access control, inventory management, billing, and barcode generation.",
   "keywords": ["supermarket", "pos", "inventory", "billing", "barcode", "react", "firebase"],
   "author": {
@@ -13,10 +13,10 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/PrakashN1234/Supermarket.git"
+    "url": "https://github.com/PrakashN1234/Billing-System.git"
   },
   "bugs": {
-    "url": "https://github.com/PrakashN1234/Supermarket/issues"
+    "url": "https://github.com/PrakashN1234/Billing-System/issues"
   },
   "engines": {
     "node": ">=18.0.0",
