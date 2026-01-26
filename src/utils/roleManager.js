@@ -277,7 +277,8 @@ export const canAccessView = (email, view) => {
     'reports': 'view_reports',
     'barcode': 'manage_barcodes',
     'activity': 'view_activity',
-    'lowstock': 'view_inventory'
+    'lowstock': 'view_inventory',
+    'settings': 'system_settings'
   };
   
   const requiredPermission = viewPermissions[view];

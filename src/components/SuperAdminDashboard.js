@@ -53,8 +53,13 @@ const SuperAdminDashboard = ({ setActiveView }) => {
   }, []);
 
   const updateStats = useCallback(() => {
-    const activeStores = stores.filter(store => store.status === 'active').length;
-    const activeUsers = users.filter(user => user.status === 'active').length;
+    // Handle different status formats (Active, active, etc.)
+    const activeStores = stores.filter(store => 
+      store.status && store.status.toLowerCase() === 'active'
+    ).length;
+    const activeUsers = users.filter(user => 
+      user.status && user.status.toLowerCase() === 'active'
+    ).length;
     
     const newStats = {
       totalStores: stores.length,
@@ -91,6 +96,9 @@ const SuperAdminDashboard = ({ setActiveView }) => {
         break;
       case 'add-user':
         setActiveView('users');
+        break;
+      case 'settings':
+        setActiveView('settings');
         break;
       default:
         console.log('Unknown action:', actionId);
@@ -238,7 +246,7 @@ const SuperAdminDashboard = ({ setActiveView }) => {
             
             <button 
               className="admin-tool-card settings"
-              onClick={() => console.log('System settings coming soon')}
+              onClick={() => setActiveView('settings')}
             >
               <Settings size={24} />
               <div>
